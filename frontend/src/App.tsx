@@ -30,6 +30,7 @@ function AppContent() {
   const [currentRoute, setCurrentRoute] = useState(window.location.pathname);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [isStoreOwnerAuthenticated, setIsStoreOwnerAuthenticated] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const { user, setUser } = useCart();
 
   // Check for existing authentication on app load
@@ -91,7 +92,7 @@ function AppContent() {
       }
     };
 
-    validateStoredAuth();
+    validateStoredAuth().finally(() => setIsInitialized(true));
   }, [setUser]);
 
   // Simple routing system
@@ -240,6 +241,18 @@ function AppContent() {
   }, [isAdminAuthenticated, isStoreOwnerAuthenticated]);
 
   const renderPage = () => {
+    // Show loading while initializing
+    if (!isInitialized) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading Afrozy...</p>
+          </div>
+        </div>
+      );
+    }
+
     // Authentication routes
     if (currentRoute === '/login') {
       return (
@@ -352,6 +365,13 @@ function AppContent() {
     // All stores listing page
     if (currentRoute === '/stores') {
       return <AllStores user={user} onLogout={user ? handleLogout : undefined} />;
+    }
+
+    // Handle any other routes - redirect to home
+    if (currentRoute !== '/') {
+      window.history.replaceState(null, '', '/');
+      setCurrentRoute('/');
+      return null;
     }
 
     // Main store
