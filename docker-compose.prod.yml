@@ -1,0 +1,196 @@
+version: '3.8'
+
+# Production Docker Compose configuration
+# Load environment variables from .env.production
+env_file:
+  - .env.production
+
+services:
+  # Production Database with backup
+  database:
+    image: postgres:15-alpine
+    container_name: afrozy-db-prod
+    restart: always
+    environment:
+      POSTGRES_DB: afrozy_market_prod
+      POSTGRES_USER: afrozy_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./database/backup:/backup
+    networks:
+      - afrozy-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U afrozy_user -d afrozy_market_prod"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Production Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: afrozy-backend-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      PGHOST: database
+      PGDATABASE: afrozy_market_prod
+      PGUSER: afrozy_user
+      PGPASSWORD: ${DB_PASSWORD}
+      PGSSLMODE: require
+      SESSION_SECRET: ${SESSION_SECRET}
+      CLIENT_URL: ${CLIENT_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      LOG_LEVEL: info
+      ENABLE_METRICS: true
+    volumes:
+      - backend_logs:/app/logs
+      - backend_uploads:/app/uploads
+    networks:
+      - afrozy-internal
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  # Production Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+        REACT_APP_API_URL: ${API_URL}
+    container_name: afrozy-frontend-prod
+    restart: always
+    networks:
+      - afrozy-internal
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+
+  # Redis for production
+  redis:
+    image: redis:7-alpine
+    container_name: afrozy-redis-prod
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    volumes:
+      - redis_prod_data:/data
+    networks:
+      - afrozy-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+
+  # Production Nginx with SSL
+  nginx:
+    image: nginx:alpine
+    container_name: afrozy-nginx-prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+      - ./frontend/build:/usr/share/nginx/html:ro
+    networks:
+      - afrozy-internal
+      - afrozy-external
+    depends_on:
+      - frontend
+      - backend
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+
+  # Database backup service
+  backup:
+    image: postgres:15-alpine
+    container_name: afrozy-backup
+    restart: "no"
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data:ro
+      - ./database/backup:/backup
+    networks:
+      - afrozy-internal
+    depends_on:
+      - database
+    command: |
+      sh -c '
+        while true; do
+          pg_dump -h database -U afrozy_user -d afrozy_market_prod > /backup/backup_$$(date +%Y%m%d_%H%M%S).sql
+          find /backup -name "backup_*.sql" -mtime +7 -delete
+          sleep 86400
+        done
+      '
+
+volumes:
+  postgres_prod_data:
+    driver: local
+  redis_prod_data:
+    driver: local
+  backend_logs:
+    driver: local
+  backend_uploads:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  afrozy-internal:
+    driver: bridge
+    internal: true
+  afrozy-external:
+    driver: bridge
