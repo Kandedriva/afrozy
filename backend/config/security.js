@@ -62,12 +62,12 @@ const helmetOptions = {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https://jamaamarket.com", "https://images.jamaamarket.com", "https://*.cloudflarestorage.com"],
+      imgSrc: ["'self'", "data:", "https://afrozy.com", "https://jamaamarket.com", "https://images.jamaamarket.com", "https://*.cloudflarestorage.com"],
       scriptSrc: process.env.NODE_ENV === 'production' 
         ? ["'self'"] 
         : ["'self'", "'unsafe-eval'"], // Allow eval in development for React
       connectSrc: process.env.NODE_ENV === 'production'
-        ? ["'self'", "https://api.stripe.com", "https://api.jamaamarket.com", "wss://jamaamarket.com"]
+        ? ["'self'", "https://api.stripe.com", "https://api.afrozy.com", "https://api.jamaamarket.com", "wss://afrozy.com", "wss://jamaamarket.com"]
         : ["'self'", "https://localhost:3001", "https://api.stripe.com", "wss://localhost:3000"],
       frameSrc: ["https://js.stripe.com", "https://hooks.stripe.com"],
       objectSrc: ["'none'"],
@@ -91,7 +91,11 @@ const corsOptions = {
     if (!origin) return callback(null, true);
     
     const allowedOrigins = [
-      // Production domains
+      // Production domains - Afrozy
+      'https://afrozy.com',
+      'https://www.afrozy.com',
+      'https://api.afrozy.com',
+      // Legacy domains - Jamaa Market (for transition)
       'https://jamaamarket.com',
       'https://www.jamaamarket.com',
       'https://api.jamaamarket.com',
