@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
 interface StripeConnectAccount {
   connected: boolean;
@@ -35,7 +34,7 @@ const StripeConnect: React.FC = () => {
 
   const fetchBalance = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/stripe-connect/balance`);
+      const response = await axios.get('/stripe-connect/balance');
       
       if (response.data.success) {
         setBalance(response.data.data);
@@ -48,7 +47,7 @@ const StripeConnect: React.FC = () => {
   const fetchAccountStatus = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/stripe-connect/account-status`);
+      const response = await axios.get('/stripe-connect/account-status');
       
       if (response.data.success) {
         setAccount(response.data.data);
@@ -76,7 +75,7 @@ const StripeConnect: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      const response = await axios.post(`${API_BASE_URL}/stripe-connect/create-account`, {});
+      const response = await axios.post('/stripe-connect/create-account', {});
       
       if (response.data.success) {
         setSuccess('Stripe account created successfully! You will be redirected to complete setup.');
@@ -102,7 +101,7 @@ const StripeConnect: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const response = await axios.post(`${API_BASE_URL}/stripe-connect/create-onboarding-link`, {});
+      const response = await axios.post('/stripe-connect/create-onboarding-link', {});
       
       if (response.data.success) {
         window.location.href = response.data.data.onboardingUrl;
@@ -120,7 +119,7 @@ const StripeConnect: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const response = await axios.post(`${API_BASE_URL}/stripe-connect/create-login-link`, {});
+      const response = await axios.post('/stripe-connect/create-login-link', {});
       
       if (response.data.success) {
         window.open(response.data.data.loginUrl, '_blank');
@@ -142,7 +141,7 @@ const StripeConnect: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const response = await axios.delete(`${API_BASE_URL}/stripe-connect/disconnect`);
+      const response = await axios.delete('/stripe-connect/disconnect');
       
       if (response.data.success) {
         setSuccess('Stripe account disconnected successfully');

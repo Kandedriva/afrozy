@@ -85,7 +85,7 @@ const StoreDetail: React.FC<StoreDetailProps> = ({ storeId, user, onLogout }) =>
 
   const fetchStoreDetails = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/store/${storeId}`);
+      const response = await axios.get(`/store/${storeId}`);
       if (response.data.success) {
         setStore(response.data.data);
       } else {

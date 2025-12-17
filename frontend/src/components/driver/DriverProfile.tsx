@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import axios from '../../utils/axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
 
 interface Driver {
   id: number;
@@ -58,7 +57,7 @@ const DriverProfile: React.FC<DriverProfileProps> = ({ driver, onUpdate }) => {
 
     try {
       const response = await axios.put(
-        `${API_BASE_URL}/drivers/profile`,
+        '/drivers/profile',
         formData,
 {}
       );
@@ -93,7 +92,7 @@ const DriverProfile: React.FC<DriverProfileProps> = ({ driver, onUpdate }) => {
       setLoading(true);
       
       const response = await axios.put(
-        `${API_BASE_URL}/drivers/status`,
+        '/drivers/status',
         { status: newStatus },
 {}
       );
@@ -129,7 +128,7 @@ const DriverProfile: React.FC<DriverProfileProps> = ({ driver, onUpdate }) => {
           setLoading(true);
               
           const response = await axios.put(
-            `${API_BASE_URL}/drivers/location`,
+            '/drivers/location',
             {
               latitude: position.coords.latitude,
               longitude: position.coords.longitude

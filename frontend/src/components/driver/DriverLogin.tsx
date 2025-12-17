@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import axios from '../../utils/axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
 
 interface Driver {
   id: number;
@@ -66,7 +65,7 @@ const DriverLogin: React.FC<DriverLoginProps> = ({ onLogin, onNavigateHome }) =>
     setError('');
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/drivers/login`, {
+      const response = await axios.post('/drivers/login', {
         email: loginForm.email,
         password: loginForm.password
       });
@@ -108,7 +107,7 @@ const DriverLogin: React.FC<DriverLoginProps> = ({ onLogin, onNavigateHome }) =>
     }
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/drivers/register`, {
+      const response = await axios.post('/drivers/register', {
         fullName: registerForm.fullName,
         email: registerForm.email,
         phone: registerForm.phone,

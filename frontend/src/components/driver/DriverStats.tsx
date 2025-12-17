@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from '../../utils/axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
 
 interface Stats {
   totalDeliveries: number;
@@ -52,7 +51,7 @@ const DriverStats: React.FC<DriverStatsProps> = ({ driver }) => {
       setLoading(true);
       
       const response = await axios.get(
-        `${API_BASE_URL}/drivers/stats?range=${timeRange}`,
+        `/drivers/stats?range=${timeRange}`,
 {}
       );
 

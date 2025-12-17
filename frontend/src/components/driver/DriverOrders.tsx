@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from '../../utils/axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
 
 interface Order {
   id: number;
@@ -53,7 +52,7 @@ const DriverOrders: React.FC<DriverOrdersProps> = ({ driver }) => {
       }
 
       const response = await axios.get(
-        `${API_BASE_URL}/drivers/orders?${params.toString()}`,
+        `/drivers/orders?${params.toString()}`,
 {}
       );
 
@@ -87,7 +86,7 @@ const DriverOrders: React.FC<DriverOrdersProps> = ({ driver }) => {
       setUpdating(orderId);
 
       const response = await axios.put(
-        `${API_BASE_URL}/drivers/orders/${orderId}/status`,
+        `/drivers/orders/${orderId}/status`,
         { status: newStatus },
 {}
       );
