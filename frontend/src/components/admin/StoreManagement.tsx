@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
-
 interface Store {
   id: number;
   store_name: string;
@@ -34,7 +32,7 @@ const StoreManagement: React.FC = () => {
   const fetchStores = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/admin/stores`, {
+      const response = await axios.get('/admin/stores', {
         withCredentials: true
       });
       
@@ -55,7 +53,7 @@ const StoreManagement: React.FC = () => {
     try {
       setUpdating(storeId);
       const response = await axios.put(
-        `${API_BASE_URL}/admin/stores/${storeId}/status`, 
+        `/admin/stores/${storeId}/status`, 
         { status: newStatus },
         {
           withCredentials: true

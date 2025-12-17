@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
-
 interface StoreOwnerRegisterProps {
   onRegisterSuccess?: (userData: any, token: string) => void;
   onNavigateToLogin?: () => void;
@@ -131,7 +129,7 @@ const StoreOwnerRegister: React.FC<StoreOwnerRegisterProps> = ({
     setError(null);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/store/register`, {
+      const response = await axios.post('/store/register', {
         // Personal info
         fullName: formData.fullName,
         email: formData.email,

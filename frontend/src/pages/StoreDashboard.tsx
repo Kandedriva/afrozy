@@ -3,7 +3,6 @@ import axios from 'axios';
 import ImageUpload from '../components/ImageUpload';
 import StripeConnect from '../components/store/StripeConnect';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
 
 interface Store {
   id: number;
@@ -112,7 +111,7 @@ const StoreDashboard: React.FC<StoreDashboardProps> = ({ storeOwner, onLogout })
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/store/products`);
+      const response = await axios.get('/store/products');
       
       if (response.data.success) {
         setProducts(response.data.data);
@@ -128,7 +127,7 @@ const StoreDashboard: React.FC<StoreDashboardProps> = ({ storeOwner, onLogout })
   const fetchSales = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/store/sales`);
+      const response = await axios.get('/store/sales');
       
       if (response.data.success) {
         setSales(response.data.data);
@@ -156,11 +155,11 @@ const StoreDashboard: React.FC<StoreDashboardProps> = ({ storeOwner, onLogout })
 
       let response;
       if (editingProduct) {
-        response = await axios.put(`${API_BASE_URL}/store/products/${editingProduct.id}`, productData, {
+        response = await axios.put(`/store/products/${editingProduct.id}`, productData, {
           headers: { Authorization: `Bearer ${token}` }
         });
       } else {
-        response = await axios.post(`${API_BASE_URL}/store/products`, productData, {
+        response = await axios.post('/store/products', productData, {
           headers: { Authorization: `Bearer ${token}` }
         });
       }
@@ -227,7 +226,7 @@ const StoreDashboard: React.FC<StoreDashboardProps> = ({ storeOwner, onLogout })
 
     try {
       const token = localStorage.getItem('afrozy-market-token');
-      await axios.delete(`${API_BASE_URL}/store/products/${productId}`, {
+      await axios.delete(`/store/products/${productId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       await fetchProducts();

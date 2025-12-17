@@ -1,8 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
-
 interface Product {
   id: number;
   store_id?: number;
@@ -204,7 +202,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? { Authorization: `Bearer ${token}` }
         : { 'X-Session-Id': getSessionId() };
 
-      const response = await axios.get(`${API_BASE_URL}/cart`, { headers });
+      const response = await axios.get('/cart', { headers });
 
       if (response.data.success) {
         // Convert backend cart items to frontend format
@@ -286,7 +284,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const headers = getAuthHeaders();
 
-      const response = await axios.post(`${API_BASE_URL}/cart/add`, {
+      const response = await axios.post('/cart/add', {
         productId: product.id,
         quantity: 1
       }, {
@@ -315,7 +313,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
 
-      const response = await axios.delete(`${API_BASE_URL}/cart/remove/${productId}`, {
+      const response = await axios.delete(`/cart/remove/${productId}`, {
         headers: getAuthHeaders()
       });
 
@@ -337,7 +335,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
 
-      const response = await axios.put(`${API_BASE_URL}/cart/update`, {
+      const response = await axios.put('/cart/update', {
         productId,
         quantity
       }, {
@@ -362,7 +360,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
 
-      const response = await axios.delete(`${API_BASE_URL}/cart/clear`, {
+      const response = await axios.delete('/cart/clear', {
         headers: getAuthHeaders()
       });
 
@@ -387,7 +385,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const sessionId = getSessionId();
       
-      const response = await axios.post(`${API_BASE_URL}/cart/merge`, {
+      const response = await axios.post('/cart/merge', {
         sessionId
       }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('afrozy-market-token')}` }

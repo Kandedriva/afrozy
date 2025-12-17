@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
-
 interface LoginProps {
   onLoginSuccess: (user: any, token: string) => void;
   onNavigateToRegister: () => void;
@@ -38,7 +36,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onNavigateToRegister, onN
     setError('');
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/login`, formData, {
+      const response = await axios.post('/auth/login', formData, {
         withCredentials: true
       });
       

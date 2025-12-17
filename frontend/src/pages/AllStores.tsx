@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
-
 interface User {
   id: number;
   username: string;
@@ -48,7 +46,7 @@ const AllStores: React.FC<AllStoresProps> = ({ user, onLogout }) => {
   const fetchStores = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/store/all`);
+      const response = await axios.get('/store/all');
       if (response.data.success) {
         setStores(response.data.data);
       } else {

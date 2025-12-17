@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useCart } from '../../context/CartContext';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
-
 interface User {
   id: number;
   username: string;
@@ -72,7 +70,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onLogout }) => {
 
       console.log('Updating profile with token:', token ? 'Token exists' : 'No token');
       console.log('Token preview:', token ? token.substring(0, 50) + '...' : 'No token');
-      console.log('API URL:', `${API_BASE_URL}/auth/profile`);
+      console.log('API URL:', '/auth/profile');
       console.log('Request data:', {
         fullName: profileForm.fullName,
         phone: profileForm.phone,
@@ -109,7 +107,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onLogout }) => {
       }
       
       const response = await axios.put(
-        `${API_BASE_URL}/auth/profile`,
+        '/auth/profile',
         {
           fullName: profileForm.fullName,
           phone: profileForm.phone,

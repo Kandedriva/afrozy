@@ -4,8 +4,6 @@ import ProductCard from '../components/ProductCard';
 import CartDrawer from '../components/CartDrawer';
 import { useCart } from '../context/CartContext';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
-
 interface Product {
   id: number;
   store_id?: number;
@@ -50,7 +48,7 @@ const Products: React.FC<ProductsProps> = ({ user, onLogout }) => {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/products`);
+      const response = await axios.get('/products');
       if (response.data.success) {
         setProducts(response.data.data);
       } else {

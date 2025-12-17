@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
-
 interface User {
   id: number;
   username: string;
@@ -29,7 +27,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
     setError('');
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/admin/login`, {
+      const response = await axios.post('/auth/admin/login', {
         email: credentials.email,
         password: credentials.password
       }, {

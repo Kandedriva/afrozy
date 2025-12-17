@@ -4,7 +4,6 @@ import ProductCard from '../components/ProductCard';
 import CartSidebar from '../components/CartSidebar';
 import { useCart } from '../context/CartContext';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
 
 interface Store {
   id: number;
@@ -109,7 +108,7 @@ const StoreDetail: React.FC<StoreDetailProps> = ({ storeId, user, onLogout }) =>
         order: sortOrder,
       });
 
-      const response = await axios.get(`${API_BASE_URL}/store/${storeId}/products?${params}`);
+      const response = await axios.get(`/store/${storeId}/products?${params}`);
       if (response.data.success) {
         setStoreData(response.data.data);
         setError(null);
