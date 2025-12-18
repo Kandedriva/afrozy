@@ -3,7 +3,7 @@ import axios from 'axios';
 // Set up axios defaults
 axios.defaults.withCredentials = true;
 
-// API URL configuration - prioritize environment variable, fall back to localhost
+// API URL configuration - prioritize environment variable, fall back to smart detection
 const getApiUrl = () => {
   if (process.env.REACT_APP_API_URL) {
     return process.env.REACT_APP_API_URL;
@@ -14,6 +14,11 @@ const getApiUrl = () => {
     // Try to determine backend URL based on frontend URL
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
+    
+    // Specific handling for afrozy domain
+    if (hostname.includes('afrozy.com')) {
+      return 'https://api.afrozy.com/api';
+    }
     
     // Common patterns for backend URLs
     if (hostname.includes('netlify.app') || hostname.includes('vercel.app')) {
