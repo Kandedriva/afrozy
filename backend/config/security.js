@@ -119,6 +119,17 @@ const corsOptions = {
       allowedOrigins.push(process.env.FRONTEND_URL);
     }
     
+    // Allow common deployment platforms
+    if (origin && (
+      origin.includes('.netlify.app') ||
+      origin.includes('.vercel.app') ||
+      origin.includes('.herokuapp.com') ||
+      origin.includes('.railway.app') ||
+      origin.includes('.render.com')
+    )) {
+      return callback(null, true);
+    }
+    
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
