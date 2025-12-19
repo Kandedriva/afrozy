@@ -47,6 +47,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     if (!product.image_url || imageError) {
       return '/api/placeholder/400/300';
     }
+    
+    // If the image URL is from R2 and failing, try proxy endpoint
+    if (imageError && product.image_url.includes('.r2.cloudflarestorage.com')) {
+      const fileName = product.image_url.split('/').pop();
+      if (fileName) {
+        return `https://api.afrozy.com/api/images/proxy/${encodeURIComponent(fileName)}`;
+      }
+    }
+    
     return product.image_url;
   };
 
