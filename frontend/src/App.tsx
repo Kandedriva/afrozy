@@ -377,7 +377,7 @@ function AppContent() {
     // Main store
     return (
       <div>
-        <Products user={user} onLogout={user ? handleLogout : undefined} />
+        <Products user={user} onLogout={user ? handleLogout : undefined} onNavigate={navigateTo} />
         
         {/* Authentication links */}
         <div className="fixed bottom-4 right-4 space-y-2">

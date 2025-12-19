@@ -30,9 +30,10 @@ interface User {
 interface ProductsProps {
   user?: User | null;
   onLogout?: () => void;
+  onNavigate?: (path: string) => void;
 }
 
-const Products: React.FC<ProductsProps> = ({ user, onLogout }) => {
+const Products: React.FC<ProductsProps> = ({ user, onLogout, onNavigate }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,37 +112,37 @@ const Products: React.FC<ProductsProps> = ({ user, onLogout }) => {
           
           <div className="flex items-center space-x-4">
             {/* Browse Stores Link */}
-            <a
-              href="/stores"
-              className="hidden sm:flex items-center space-x-2 px-3 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors text-sm"
+            <button
+              onClick={() => onNavigate?.('/stores')}
+              className="hidden sm:flex items-center space-x-2 px-3 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors text-sm cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
               <span>Browse Stores</span>
-            </a>
+            </button>
 
             {/* Sell on Afrozy Link */}
-            <a
-              href="/store/register"
-              className="hidden sm:flex items-center space-x-2 px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-sm"
+            <button
+              onClick={() => onNavigate?.('/store/register')}
+              className="hidden sm:flex items-center space-x-2 px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-sm cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
               <span>Sell on Afrozy</span>
-            </a>
+            </button>
 
             {/* Driver Portal Link */}
-            <a
-              href="/driver"
-              className="hidden sm:flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm"
+            <button
+              onClick={() => onNavigate?.('/driver')}
+              className="hidden sm:flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>Driver Portal</span>
-            </a>
+            </button>
 
             {/* Cart Icon */}
             <button
