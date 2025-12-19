@@ -18,8 +18,8 @@ const checkR2Config = (req, res, next) => {
 };
 
 
-// Test R2 connection endpoint
-router.get('/test-connection', authenticateSession(), async (req, res) => {
+// Test R2 connection endpoint (removed auth requirement for debugging)
+router.get('/test-connection', async (req, res) => {
   try {
     const isConnected = await r2Service.testConnection();
     res.json({
@@ -234,6 +234,74 @@ router.post('/product',
     }
   }
 );
+
+// Serve image through proxy (for private bucket access)
+router.get('/proxy/:key(*)', async (req, res) => {
+  try {
+    const key = req.params.key;
+    
+    if (!key) {
+      return res.status(400).json({
+        success: false,
+        message: 'Image key is required'
+      });
+    }
+
+    // Get image from R2
+    const getParams = {
+      Bucket: r2Service.bucketName,
+      Key: key,
+    };
+
+    const response = await r2Service.client.send(new require('@aws-sdk/client-s3').GetObjectCommand(getParams));
+    
+    // Set appropriate headers
+    res.setHeader('Content-Type', response.ContentType || 'image/webp');
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year cache
+    res.setHeader('Content-Disposition', 'inline');
+    
+    // Stream the image data
+    const stream = response.Body;
+    
+    if (stream) {
+      // Handle different types of stream
+      if (typeof stream.pipe === 'function') {
+        stream.pipe(res);
+      } else if (stream instanceof Buffer) {
+        res.send(stream);
+      } else {
+        // For web streams or other types
+        const chunks = [];
+        for await (const chunk of stream) {
+          chunks.push(chunk);
+        }
+        const buffer = Buffer.concat(chunks);
+        res.send(buffer);
+      }
+    } else {
+      res.status(404).json({
+        success: false,
+        message: 'Image not found'
+      });
+    }
+
+  } catch (error) {
+    logger.error('Image proxy error:', error);
+    
+    // If image not found, return 404
+    if (error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) {
+      return res.status(404).json({
+        success: false,
+        message: 'Image not found'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to serve image'
+    });
+  }
+});
 
 // Upload store logo
 router.post('/store-logo',

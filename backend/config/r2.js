@@ -164,10 +164,27 @@ class R2Service {
             await this.client.send(new PutObjectCommand(uploadParams));
           }
           
-          // Generate public URL - use the public URL base + filename
-          const publicUrl = this.publicUrl.endsWith('/') 
-            ? `${this.publicUrl}${sizeFileName}` 
-            : `${this.publicUrl}/${sizeFileName}`;
+          // Generate public URL - try multiple approaches for maximum compatibility
+          let publicUrl;
+          
+          // 1. Try custom domain first (if configured and different from endpoint)
+          if (this.publicUrl && this.publicUrl !== this.endpoint && !this.publicUrl.includes('.r2.cloudflarestorage.com')) {
+            publicUrl = this.publicUrl.endsWith('/') 
+              ? `${this.publicUrl}${sizeFileName}` 
+              : `${this.publicUrl}/${sizeFileName}`;
+          }
+          // 2. Try using the configured public URL (even if it's the R2 domain)
+          else if (this.publicUrl) {
+            publicUrl = this.publicUrl.endsWith('/') 
+              ? `${this.publicUrl}${sizeFileName}` 
+              : `${this.publicUrl}/${sizeFileName}`;
+          }
+          // 3. Fallback to API proxy endpoint for serving images
+          else {
+            // Use the API proxy endpoint as fallback
+            const apiBaseUrl = process.env.API_URL || 'https://api.afrozy.com';
+            publicUrl = `${apiBaseUrl}/api/images/proxy/${encodeURIComponent(sizeFileName)}`;
+          }
           
           return {
             size: size.suffix.replace('_', ''),
