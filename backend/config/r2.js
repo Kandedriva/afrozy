@@ -1,6 +1,13 @@
 const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
-const sharp = require('sharp');
+// Safely require sharp with fallback
+let sharp;
+try {
+  sharp = require('sharp');
+} catch (error) {
+  console.warn('⚠️ Sharp not available, image processing will be disabled:', error.message);
+  sharp = null;
+}
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const logger = require('./logger');
@@ -61,6 +68,12 @@ class R2Service {
    * Process and optimize image
    */
   async processImage(buffer, options = {}) {
+    // If sharp is not available, return the original buffer
+    if (!sharp) {
+      console.warn('⚠️ Image processing skipped - sharp not available');
+      return buffer;
+    }
+
     const {
       width = 800,
       height = 600,
@@ -89,7 +102,8 @@ class R2Service {
       return processedImage;
     } catch (error) {
       logger.error('Error processing image:', error);
-      throw new Error('Failed to process image');
+      console.warn('⚠️ Falling back to original image due to processing error');
+      return buffer;
     }
   }
 

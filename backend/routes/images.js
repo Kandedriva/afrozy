@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { GetObjectCommand } = require('@aws-sdk/client-s3');
 const r2Service = require('../config/r2');
 const { uploadSingle, uploadMultiple, requireFile } = require('../middleware/upload');
 const { authenticateSession } = require('../utils/auth');
@@ -253,7 +254,7 @@ router.get('/proxy/:key(*)', async (req, res) => {
       Key: key,
     };
 
-    const response = await r2Service.client.send(new require('@aws-sdk/client-s3').GetObjectCommand(getParams));
+    const response = await r2Service.client.send(new GetObjectCommand(getParams));
     
     // Set appropriate headers
     res.setHeader('Content-Type', response.ContentType || 'image/webp');
