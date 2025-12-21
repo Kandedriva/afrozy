@@ -50,9 +50,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     
     // If the image URL is from R2 and failing, try proxy endpoint
     if (imageError && product.image_url.includes('.r2.cloudflarestorage.com')) {
-      const fileName = product.image_url.split('/').pop();
-      if (fileName) {
-        return `https://api.afrozy.com/api/images/proxy/${encodeURIComponent(fileName)}`;
+      const urlParts = product.image_url.split('/');
+      if (urlParts.length >= 2) {
+        const folder = urlParts[urlParts.length - 2];
+        const filename = urlParts[urlParts.length - 1];
+        return `https://api.afrozy.com/api/images/proxy/${folder}/${filename}`;
       }
     }
     
