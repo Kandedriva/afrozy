@@ -197,7 +197,15 @@ class R2Service {
           else {
             // Use the API proxy endpoint as fallback
             const apiBaseUrl = process.env.API_URL || 'https://api.afrozy.com';
-            publicUrl = `${apiBaseUrl}/api/images/proxy/${encodeURIComponent(sizeFileName)}`;
+            // Split the filename to get folder and file for the proxy route
+            const pathParts = sizeFileName.split('/');
+            if (pathParts.length >= 2) {
+              const folder = pathParts[0];
+              const filename = pathParts.slice(1).join('/');
+              publicUrl = `${apiBaseUrl}/api/images/proxy/${folder}/${filename}`;
+            } else {
+              publicUrl = `${apiBaseUrl}/api/images/proxy/general/${sizeFileName}`;
+            }
           }
           
           return {

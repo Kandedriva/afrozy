@@ -15,7 +15,8 @@
     "seed": "node scripts/addSampleStoreProducts.js",
     "setup": "npm run migrate && npm run seed",
     "docker:build": "docker build -t afrozy-backend .",
-    "docker:run": "docker run -p 3001:3001 afrozy-backend"
+    "docker:run": "docker run -p 3001:3001 afrozy-backend",
+    "postinstall": "npm rebuild sharp --platform=linux --arch=x64"
   },
   "keywords": [
     "ecommerce",

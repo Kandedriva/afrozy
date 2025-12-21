@@ -237,9 +237,11 @@ router.post('/product',
 );
 
 // Serve image through proxy (for private bucket access)
-router.get('/proxy/:key(*)', async (req, res) => {
+router.get('/proxy/:folder/:filename', async (req, res) => {
   try {
-    const key = req.params.key;
+    // Reconstruct the file path from parameters
+    const { folder, filename } = req.params;
+    const key = `${folder}/${filename}`;
     
     if (!key) {
       return res.status(400).json({
