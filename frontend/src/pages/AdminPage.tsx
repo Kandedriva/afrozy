@@ -13,11 +13,21 @@ interface AdminPageProps {
 }
 
 const AdminPage: React.FC<AdminPageProps> = ({ onLogout }) => {
-  const [currentPage, setCurrentPage] = useState('dashboard');
+  const getInitialPage = () => {
+    const path = window.location.pathname;
+    if (path.startsWith('/admin/')) {
+      const page = path.split('/admin/')[1];
+      return page || 'dashboard';
+    }
+    return 'dashboard';
+  };
+
+  const [currentPage, setCurrentPage] = useState(getInitialPage());
 
   const handleNavigation = (page: string) => {
     if (page === 'products-add') {
       setCurrentPage('products');
+      window.history.pushState(null, '', '/admin/products');
       // Trigger add product form after a short delay to ensure the component is mounted
       setTimeout(() => {
         const addButton = document.querySelector('[data-action="add-product"]') as HTMLButtonElement;
@@ -27,6 +37,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onLogout }) => {
       }, 100);
     } else {
       setCurrentPage(page);
+      window.history.pushState(null, '', `/admin/${page}`);
     }
   };
 
@@ -54,7 +65,18 @@ const AdminPage: React.FC<AdminPageProps> = ({ onLogout }) => {
   // Simple navigation handler for navbar links (in a real app, you'd use React Router)
   const handlePageNavigation = (page: string) => {
     setCurrentPage(page);
+    window.history.pushState(null, '', `/admin/${page}`);
   };
+
+  // Listen for browser navigation events (back/forward buttons)
+  React.useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPage(getInitialPage());
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Override navigation clicks
   React.useEffect(() => {
