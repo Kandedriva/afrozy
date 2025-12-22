@@ -187,16 +187,14 @@ class R2Service {
               ? `${this.publicUrl}${sizeFileName}` 
               : `${this.publicUrl}/${sizeFileName}`;
           }
-          // 2. Try using the configured public URL (even if it's the R2 domain)
-          else if (this.publicUrl) {
-            publicUrl = this.publicUrl.endsWith('/') 
-              ? `${this.publicUrl}${sizeFileName}` 
-              : `${this.publicUrl}/${sizeFileName}`;
-          }
-          // 3. Fallback to API proxy endpoint for serving images
+          // 2. If using R2 storage domain directly, use API proxy instead (since bucket is likely private)
           else {
             // Use the API proxy endpoint as fallback
-            const apiBaseUrl = process.env.API_URL || 'https://api.afrozy.com';
+            // For production, use the main API URL, for development use localhost
+            const apiBaseUrl = process.env.NODE_ENV === 'production' 
+              ? 'https://api.afrozy.com' 
+              : (process.env.CLIENT_URL?.replace(':3000', ':3001') || 'http://localhost:3001');
+            
             // Split the filename to get folder and file for the proxy route
             const pathParts = sizeFileName.split('/');
             if (pathParts.length >= 2) {
