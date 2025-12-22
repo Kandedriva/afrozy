@@ -129,6 +129,7 @@ router.delete('/products/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+
 // GET dashboard statistics
 router.get('/dashboard/stats', authenticateAdmin, async (req, res) => {
   try {
@@ -188,8 +189,10 @@ router.get('/dashboard/stats', authenticateAdmin, async (req, res) => {
           SELECT 
             CAST(item->>'product_id' AS INTEGER) as product_id
           FROM orders,
-          jsonb_array_elements(items::jsonb) as item
-          WHERE items IS NOT NULL AND items != ''
+          jsonb_array_elements(items) as item
+          WHERE items IS NOT NULL 
+            AND jsonb_typeof(items) = 'array'
+            AND jsonb_array_length(items) > 0
         ) product_orders
         GROUP BY product_id
       ) order_stats ON p.id = order_stats.product_id
