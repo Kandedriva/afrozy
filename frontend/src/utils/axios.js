@@ -17,21 +17,21 @@ const getApiUrl = () => {
     
     // Specific handling for afrozy domain
     if (hostname.includes('afrozy.com')) {
-      return 'https://api.afrozy.com/api';
+      return 'https://api.afrozy.com';
     }
     
     // Common patterns for backend URLs
     if (hostname.includes('netlify.app') || hostname.includes('vercel.app')) {
       // For Netlify/Vercel deployments, try common backend patterns
-      return `${protocol}//api.${hostname}/api`;
+      return `${protocol}//api.${hostname}`;
     }
     
     // For custom domains, assume API subdomain
-    return `${protocol}//api.${hostname}/api`;
+    return `${protocol}//api.${hostname}`;
   }
   
   // Development fallback
-  return 'http://localhost:3001/api';
+  return 'http://localhost:3001';
 };
 
 axios.defaults.baseURL = getApiUrl();
