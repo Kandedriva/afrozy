@@ -190,9 +190,9 @@ class R2Service {
           // 2. If using R2 storage domain directly, use API proxy instead (since bucket is likely private)
           else {
             // Use the API proxy endpoint as fallback
-            // For production, use the main API URL, for development use localhost
+            // Always use the current server URL for consistency
             const apiBaseUrl = process.env.NODE_ENV === 'production' 
-              ? 'https://api.afrozy.com' 
+              ? (process.env.API_BASE_URL || 'http://localhost:3001')  // Use configured production URL or fallback
               : (process.env.CLIENT_URL?.replace(':3000', ':3001') || 'http://localhost:3001');
             
             // Split the filename to get folder and file for the proxy route

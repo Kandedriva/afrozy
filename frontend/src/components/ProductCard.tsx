@@ -48,13 +48,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       return '/api/placeholder/400/300';
     }
     
-    // If the image URL is from R2 and failing, try proxy endpoint
-    if (imageError && product.image_url.includes('.r2.cloudflarestorage.com')) {
-      const urlParts = product.image_url.split('/');
-      if (urlParts.length >= 2) {
-        const folder = urlParts[urlParts.length - 2];
-        const filename = urlParts[urlParts.length - 1];
-        return `https://api.afrozy.com/api/images/proxy/${folder}/${filename}`;
+    // If the image URL is failing and it's from an external API, try local proxy
+    if (imageError && product.image_url.includes('/api/images/proxy/')) {
+      // Extract the path after /proxy/
+      const proxyMatch = product.image_url.match(/\/api\/images\/proxy\/(.+)$/);
+      if (proxyMatch) {
+        // Use current domain for proxy instead of hardcoded domain
+        const currentOrigin = window.location.origin.replace(':3000', ':3001');
+        return `${currentOrigin}/api/images/proxy/${proxyMatch[1]}`;
       }
     }
     

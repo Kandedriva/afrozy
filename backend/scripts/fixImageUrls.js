@@ -31,9 +31,9 @@ async function fixImageUrls() {
           const folder = pathParts[0];
           const filename = pathParts.slice(1).join('/');
           
-          // Create new API proxy URL
+          // Create new API proxy URL using the same logic as R2 service
           const apiBaseUrl = process.env.NODE_ENV === 'production' 
-            ? 'https://api.afrozy.com' 
+            ? (process.env.API_BASE_URL || 'http://localhost:3001')
             : (process.env.CLIENT_URL?.replace(':3000', ':3001') || 'http://localhost:3001');
           const newUrl = `${apiBaseUrl}/api/images/proxy/${folder}/${filename}`;
           
