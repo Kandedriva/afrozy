@@ -136,96 +136,88 @@ class R2Service {
       const fileName = this.generateFileName(file.originalname, options.prefix || 'products');
       const baseName = fileName.replace(/\.[^/.]+$/, "");
 
-      // Create multiple sizes with optimized processing
-      const sizes = [
-        { suffix: '_thumb', width: 150, height: 150, quality: 80 },
-        { suffix: '_medium', width: 400, height: 300, quality: 85 },
-        { suffix: '_large', width: 800, height: 600, quality: 90 },
-        { suffix: '_original', buffer: originalBuffer } // Keep original
-      ];
-
-      const uploadPromises = sizes.map(async (size) => {
-        try {
-          const processedBuffer = size.buffer || await this.processImage(originalBuffer, size);
-          const sizeFileName = size.suffix === '_original' ? fileName : `${baseName}${size.suffix}.webp`;
-          
-          const uploadParams = {
-            Bucket: this.bucketName,
-            Key: sizeFileName,
-            Body: processedBuffer,
-            ContentType: size.suffix === '_original' ? file.mimetype : 'image/webp',
-            CacheControl: 'public, max-age=31536000', // 1 year cache
-            ContentDisposition: 'inline',
-            Metadata: {
-              originalName: file.originalname,
-              uploadedAt: new Date().toISOString(),
-              size: size.suffix
-            }
-          };
-
-          // Use Upload with progress tracking for larger files
-          if (processedBuffer.length > 1024 * 1024) { // 1MB
-            const upload = new Upload({
-              client: this.client,
-              params: uploadParams,
-              partSize: 1024 * 1024 * 5, // 5MB parts
-              leavePartsOnError: false
-            });
-
-            await upload.done();
-          } else {
-            // Use simple put for smaller files
-            await this.client.send(new PutObjectCommand(uploadParams));
-          }
-          
-          // Generate public URL - try multiple approaches for maximum compatibility
-          let publicUrl;
-          
-          // 1. Try custom domain first (if configured and different from endpoint)
-          if (this.publicUrl && this.publicUrl !== this.endpoint && !this.publicUrl.includes('.r2.cloudflarestorage.com')) {
-            publicUrl = this.publicUrl.endsWith('/') 
-              ? `${this.publicUrl}${sizeFileName}` 
-              : `${this.publicUrl}/${sizeFileName}`;
-          }
-          // 2. If using R2 storage domain directly, use API proxy instead (since bucket is likely private)
-          else {
-            // Use the API proxy endpoint as fallback
-            // Always use the current server URL for consistency
-            const apiBaseUrl = process.env.NODE_ENV === 'production' 
-              ? (process.env.API_BASE_URL || 'http://localhost:3001')  // Use configured production URL or fallback
-              : (process.env.CLIENT_URL?.replace(':3000', ':3001') || 'http://localhost:3001');
-            
-            // Split the filename to get folder and file for the proxy route
-            const pathParts = sizeFileName.split('/');
-            if (pathParts.length >= 2) {
-              const folder = pathParts[0];
-              const filename = pathParts.slice(1).join('/');
-              publicUrl = `${apiBaseUrl}/api/images/proxy/${folder}/${filename}`;
-            } else {
-              publicUrl = `${apiBaseUrl}/api/images/proxy/general/${sizeFileName}`;
-            }
-          }
-          
-          return {
-            size: size.suffix.replace('_', ''),
-            url: publicUrl,
-            key: sizeFileName
-          };
-        } catch (uploadError) {
-          logger.error(`Error uploading size ${size.suffix}:`, uploadError);
-          throw new Error(`Failed to upload ${size.suffix}: ${uploadError.message}`);
-        }
+      // Process and upload single optimized image
+      const processedBuffer = await this.processImage(originalBuffer, {
+        width: options.width || 800,
+        height: options.height || 600, 
+        quality: options.quality || 85
       });
-
-      const uploadResults = await Promise.all(uploadPromises);
       
-      // Structure the response
+      // Use .webp extension for optimized format
+      const finalFileName = `${baseName}.webp`;
+      
+      const uploadParams = {
+        Bucket: this.bucketName,
+        Key: finalFileName,
+        Body: processedBuffer,
+        ContentType: 'image/webp',
+        CacheControl: 'public, max-age=31536000', // 1 year cache
+        ContentDisposition: 'inline',
+        Metadata: {
+          originalName: file.originalname,
+          uploadedAt: new Date().toISOString()
+        }
+      };
+
+      // Use Upload with progress tracking for larger files
+      if (processedBuffer.length > 1024 * 1024) { // 1MB
+        const upload = new Upload({
+          client: this.client,
+          params: uploadParams,
+          partSize: 1024 * 1024 * 5, // 5MB parts
+          leavePartsOnError: false
+        });
+
+        await upload.done();
+      } else {
+        // Use simple put for smaller files
+        await this.client.send(new PutObjectCommand(uploadParams));
+      }
+      
+      // Generate public URL - try multiple approaches for maximum compatibility
+      let publicUrl;
+      
+      // 1. Try custom domain first (if configured and different from endpoint)
+      if (this.publicUrl && this.publicUrl !== this.endpoint && !this.publicUrl.includes('.r2.cloudflarestorage.com')) {
+        publicUrl = this.publicUrl.endsWith('/') 
+          ? `${this.publicUrl}${finalFileName}` 
+          : `${this.publicUrl}/${finalFileName}`;
+      }
+      // 2. If using R2 storage domain directly, use API proxy instead (since bucket is likely private)
+      else {
+        // Use the API proxy endpoint as fallback
+        // Always use the current server URL for consistency
+        let apiBaseUrl;
+        
+        if (process.env.NODE_ENV === 'production') {
+          // In production, use the configured API base URL or derive from client URL
+          apiBaseUrl = process.env.API_BASE_URL || 
+                      process.env.CLIENT_URL?.replace(':3000', ':3001') || 
+                      'https://afrozy.com';  // Default production URL
+        } else {
+          // In development, use localhost
+          apiBaseUrl = 'http://localhost:3001';
+        }
+        
+        // Split the filename to get folder and file for the proxy route
+        const pathParts = finalFileName.split('/');
+        if (pathParts.length >= 2) {
+          const folder = pathParts[0];
+          const filename = pathParts.slice(1).join('/');
+          publicUrl = `${apiBaseUrl}/api/images/proxy/${folder}/${filename}`;
+        } else {
+          publicUrl = `${apiBaseUrl}/api/images/proxy/general/${finalFileName}`;
+        }
+      }
+      
+      // Structure the response for backwards compatibility
       const imageUrls = {
-        original: uploadResults.find(r => r.size === 'original')?.url,
-        large: uploadResults.find(r => r.size === 'large')?.url,
-        medium: uploadResults.find(r => r.size === 'medium')?.url,
-        thumb: uploadResults.find(r => r.size === 'thumb')?.url,
-        keys: uploadResults.map(r => r.key)
+        url: publicUrl,
+        original: publicUrl,
+        large: publicUrl, 
+        medium: publicUrl,
+        thumb: publicUrl,
+        keys: [finalFileName]
       };
 
       logger.info(`Image uploaded successfully: ${fileName}`);

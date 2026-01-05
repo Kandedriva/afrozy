@@ -219,8 +219,8 @@ router.post('/product',
         success: true,
         message: 'Product image uploaded successfully',
         data: {
-          imageUrl: imageUrls.large, // Return large size for product display
-          thumbnailUrl: imageUrls.thumb,
+          imageUrl: imageUrls.url, // Single optimized image
+          thumbnailUrl: imageUrls.url, // Same image for all uses
           allUrls: imageUrls,
           originalName: file.originalname
         }
@@ -244,9 +244,22 @@ router.get('/proxy/:folder/:filename', async (req, res) => {
     const key = `${folder}/${filename}`;
     
     if (!key) {
+      logger.error('Image proxy error: No key provided');
       return res.status(400).json({
         success: false,
         message: 'Image key is required'
+      });
+    }
+
+    // Log the request for debugging
+    logger.info(`Image proxy request: ${key}`);
+
+    // Check if R2 service is configured
+    if (!r2Service.isConfigured()) {
+      logger.error('Image proxy error: R2 service not configured');
+      return res.status(500).json({
+        success: false,
+        message: 'Image service not configured'
       });
     }
 
@@ -293,11 +306,20 @@ router.get('/proxy/:folder/:filename', async (req, res) => {
     
     // If image not found, return 404
     if (error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) {
+      logger.warn(`Image not found in R2: ${req.params.folder}/${req.params.filename}`);
       return res.status(404).json({
         success: false,
         message: 'Image not found'
       });
     }
+    
+    // Log detailed error for debugging
+    logger.error('Detailed image proxy error:', {
+      errorName: error.name,
+      errorMessage: error.message,
+      httpStatusCode: error.$metadata?.httpStatusCode,
+      requestedKey: `${req.params.folder}/${req.params.filename}`
+    });
     
     res.status(500).json({
       success: false,
@@ -335,8 +357,8 @@ router.post('/store-logo',
         success: true,
         message: 'Store logo uploaded successfully',
         data: {
-          logoUrl: imageUrls.medium,
-          thumbnailUrl: imageUrls.thumb,
+          logoUrl: imageUrls.url,
+          thumbnailUrl: imageUrls.url, 
           allUrls: imageUrls,
           originalName: file.originalname
         }
