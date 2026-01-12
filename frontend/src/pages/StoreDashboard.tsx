@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import axios from '../utils/axios';
 import ImageUpload from '../components/ImageUpload';
 import StripeConnect from '../components/store/StripeConnect';
 

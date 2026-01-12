@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import axios from '../utils/axios';
 import ProductCard from '../components/ProductCard';
 import CartSidebar from '../components/CartSidebar';
 import { useCart } from '../context/CartContext';

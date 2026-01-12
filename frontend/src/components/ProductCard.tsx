@@ -48,18 +48,30 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       return '/api/placeholder/400/300';
     }
     
-    // If the image URL is failing and it's from an external API, try local proxy
-    if (imageError && product.image_url.includes('/api/images/proxy/')) {
-      // Extract the path after /proxy/
-      const proxyMatch = product.image_url.match(/\/api\/images\/proxy\/(.+)$/);
+    let imageUrl = product.image_url;
+    
+    // If the image URL is from a proxy and we're in production, ensure it uses the correct domain
+    if (imageUrl.includes('/api/images/proxy/')) {
+      const proxyMatch = imageUrl.match(/\/api\/images\/proxy\/(.+)$/);
       if (proxyMatch) {
-        // Use current domain for proxy instead of hardcoded domain
-        const currentOrigin = window.location.origin.replace(':3000', ':3001');
-        return `${currentOrigin}/api/images/proxy/${proxyMatch[1]}`;
+        const isProduction = process.env.NODE_ENV === 'production';
+        const currentOrigin = isProduction ? 
+          window.location.origin : 
+          window.location.origin.replace(':3000', ':3001');
+        imageUrl = `${currentOrigin}/api/images/proxy/${proxyMatch[1]}`;
       }
     }
     
-    return product.image_url;
+    // If the URL is relative, make it absolute
+    if (imageUrl.startsWith('/')) {
+      const isProduction = process.env.NODE_ENV === 'production';
+      const currentOrigin = isProduction ? 
+        window.location.origin : 
+        window.location.origin.replace(':3000', ':3001');
+      imageUrl = `${currentOrigin}${imageUrl}`;
+    }
+    
+    return imageUrl;
   };
 
   const handleAddToCart = async () => {

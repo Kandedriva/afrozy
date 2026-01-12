@@ -290,7 +290,10 @@ const ProductManagement: React.FC = () => {
                         alt="Product preview" 
                         className="w-16 h-16 rounded-md object-cover border"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/api/placeholder/64/64';
+                          const target = e.target as HTMLImageElement;
+                          if (target.src !== '/api/placeholder/64/64') {
+                            target.src = '/api/placeholder/64/64';
+                          }
                         }}
                       />
                       <div className="flex-1 min-w-0">
@@ -367,7 +370,10 @@ const ProductManagement: React.FC = () => {
                         alt={product.name}
                         className="w-12 h-12 rounded-md object-cover"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/api/placeholder/48/48';
+                          const target = e.target as HTMLImageElement;
+                          if (target.src !== '/api/placeholder/48/48') {
+                            target.src = '/api/placeholder/48/48';
+                          }
                         }}
                       />
                       <div className="ml-4">

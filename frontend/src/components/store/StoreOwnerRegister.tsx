@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import axios from '../../utils/axios';
 
 interface StoreOwnerRegisterProps {
   onRegisterSuccess?: (userData: any, token: string) => void;

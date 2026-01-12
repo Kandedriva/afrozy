@@ -35,7 +35,7 @@ class R2Service {
       forcePathStyle: false,
       maxAttempts: 3,
       retryMode: 'adaptive',
-      requestTimeout: 30000,
+      requestTimeout: 120000, // Increased to 2 minutes for large files
       maxSockets: 25,
       keepAlive: true,
       keepAliveMsecs: 1000
@@ -174,32 +174,30 @@ class R2Service {
         await this.client.send(new PutObjectCommand(uploadParams));
       }
       
-      // Generate public URL - try multiple approaches for maximum compatibility
+      // Generate public URL
       let publicUrl;
-      
-      // 1. Try custom domain first (if configured and different from endpoint)
-      if (this.publicUrl && this.publicUrl !== this.endpoint && !this.publicUrl.includes('.r2.cloudflarestorage.com')) {
-        publicUrl = this.publicUrl.endsWith('/') 
-          ? `${this.publicUrl}${finalFileName}` 
+
+      // Check if we have a custom domain or public R2 URL configured
+      if (this.publicUrl && this.publicUrl !== this.endpoint) {
+        // Use the public URL (CDN or R2 public domain)
+        publicUrl = this.publicUrl.endsWith('/')
+          ? `${this.publicUrl}${finalFileName}`
           : `${this.publicUrl}/${finalFileName}`;
-      }
-      // 2. If using R2 storage domain directly, use API proxy instead (since bucket is likely private)
-      else {
-        // Use the API proxy endpoint as fallback
-        // Always use the current server URL for consistency
+
+        logger.info(`Using direct CDN URL: ${publicUrl}`);
+      } else {
+        // Fallback to API proxy if no public URL is configured
+        logger.warn('No R2_PUBLIC_URL configured, falling back to API proxy');
+
         let apiBaseUrl;
-        
         if (process.env.NODE_ENV === 'production') {
-          // In production, use the configured API base URL or derive from client URL
-          apiBaseUrl = process.env.API_BASE_URL || 
-                      process.env.CLIENT_URL?.replace(':3000', ':3001') || 
-                      'https://afrozy.com';  // Default production URL
+          apiBaseUrl = process.env.API_BASE_URL ||
+                      process.env.CLIENT_URL?.replace(':3000', ':3001') ||
+                      'https://api.afrozy.com';
         } else {
-          // In development, use localhost
           apiBaseUrl = 'http://localhost:3001';
         }
-        
-        // Split the filename to get folder and file for the proxy route
+
         const pathParts = finalFileName.split('/');
         if (pathParts.length >= 2) {
           const folder = pathParts[0];
