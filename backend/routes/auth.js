@@ -2,12 +2,18 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { authenticateUser, createUser, authenticateSession } = require('../utils/auth');
 const { pool } = require('../config/database');
-const { 
-  getUserSessions, 
-  destroyUserSessions, 
+const {
+  getUserSessions,
+  destroyUserSessions,
   destroySession,
-  getSessionStats 
+  getSessionStats
 } = require('../utils/sessionUtils');
+const {
+  createPasswordResetToken,
+  verifyResetToken,
+  clearResetToken,
+  sendPasswordResetEmail
+} = require('../utils/passwordReset');
 
 const router = express.Router();
 
@@ -76,19 +82,41 @@ router.post('/register', async (req, res) => {
 
     const user = await createUser({ ...userData, password }, 'customer');
 
-    // Create session
-    req.session.userId = user.id;
-    req.session.userType = 'customer';
-    req.session.email = user.email;
-    req.session.isNewSession = true;
-    req.session.loginTime = new Date().toISOString();
-
-    res.status(201).json({
-      success: true,
-      message: 'User registered successfully',
-      data: {
-        user
+    // Regenerate session to prevent session fixation attacks
+    req.session.regenerate((err) => {
+      if (err) {
+        console.error('Session regeneration error:', err);
+        return res.status(500).json({
+          success: false,
+          message: 'Error creating session'
+        });
       }
+
+      // Create new session with user data
+      req.session.userId = user.id;
+      req.session.userType = 'customer';
+      req.session.email = user.email;
+      req.session.isNewSession = true;
+      req.session.loginTime = new Date().toISOString();
+
+      // Save session before sending response
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error('Session save error:', saveErr);
+          return res.status(500).json({
+            success: false,
+            message: 'Error saving session'
+          });
+        }
+
+        res.status(201).json({
+          success: true,
+          message: 'User registered successfully',
+          data: {
+            user
+          }
+        });
+      });
     });
 
   } catch (error) {
@@ -130,17 +158,39 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Create session
-    req.session.userId = authResult.data.user.id;
-    req.session.userType = authResult.data.user.user_type;
-    req.session.email = authResult.data.user.email;
-    req.session.isNewSession = true;
-    req.session.loginTime = new Date().toISOString();
+    // Regenerate session to prevent session fixation attacks
+    req.session.regenerate((err) => {
+      if (err) {
+        console.error('Session regeneration error:', err);
+        return res.status(500).json({
+          success: false,
+          message: 'Error creating session'
+        });
+      }
 
-    res.json({
-      success: true,
-      message: authResult.message,
-      data: authResult.data
+      // Create new session with user data
+      req.session.userId = authResult.data.user.id;
+      req.session.userType = authResult.data.user.user_type;
+      req.session.email = authResult.data.user.email;
+      req.session.isNewSession = true;
+      req.session.loginTime = new Date().toISOString();
+
+      // Save session before sending response
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error('Session save error:', saveErr);
+          return res.status(500).json({
+            success: false,
+            message: 'Error saving session'
+          });
+        }
+
+        res.json({
+          success: true,
+          message: authResult.message,
+          data: authResult.data
+        });
+      });
     });
 
   } catch (error) {
@@ -291,20 +341,42 @@ router.post('/admin/login', async (req, res) => {
       });
     }
 
-    // Create admin session
-    req.session.userId = authResult.data.user.id;
-    req.session.userType = 'admin';
-    req.session.email = authResult.data.user.email;
-    req.session.isAdmin = true;
-    req.session.isNewSession = true;
-    req.session.loginTime = new Date().toISOString();
-
-    res.json({
-      success: true,
-      message: 'Admin login successful',
-      data: {
-        user: authResult.data.user
+    // Regenerate session to prevent session fixation attacks
+    req.session.regenerate((err) => {
+      if (err) {
+        console.error('Session regeneration error:', err);
+        return res.status(500).json({
+          success: false,
+          message: 'Error creating session'
+        });
       }
+
+      // Create admin session
+      req.session.userId = authResult.data.user.id;
+      req.session.userType = 'admin';
+      req.session.email = authResult.data.user.email;
+      req.session.isAdmin = true;
+      req.session.isNewSession = true;
+      req.session.loginTime = new Date().toISOString();
+
+      // Save session before sending response
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error('Session save error:', saveErr);
+          return res.status(500).json({
+            success: false,
+            message: 'Error saving session'
+          });
+        }
+
+        res.json({
+          success: true,
+          message: 'Admin login successful',
+          data: {
+            user: authResult.data.user
+          }
+        });
+      });
     });
 
   } catch (error) {
@@ -373,19 +445,41 @@ router.post('/store-owner/register', async (req, res) => {
 
     const user = await createUser({ ...userData, password }, 'store_owner');
 
-    // Create session
-    req.session.userId = user.id;
-    req.session.userType = 'store_owner';
-    req.session.email = user.email;
-    req.session.isNewSession = true;
-    req.session.loginTime = new Date().toISOString();
-
-    res.status(201).json({
-      success: true,
-      message: 'Store owner registered successfully',
-      data: {
-        user
+    // Regenerate session to prevent session fixation attacks
+    req.session.regenerate((err) => {
+      if (err) {
+        console.error('Session regeneration error:', err);
+        return res.status(500).json({
+          success: false,
+          message: 'Error creating session'
+        });
       }
+
+      // Create session
+      req.session.userId = user.id;
+      req.session.userType = 'store_owner';
+      req.session.email = user.email;
+      req.session.isNewSession = true;
+      req.session.loginTime = new Date().toISOString();
+
+      // Save session before sending response
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error('Session save error:', saveErr);
+          return res.status(500).json({
+            success: false,
+            message: 'Error saving session'
+          });
+        }
+
+        res.status(201).json({
+          success: true,
+          message: 'Store owner registered successfully',
+          data: {
+            user
+          }
+        });
+      });
     });
 
   } catch (error) {
@@ -433,17 +527,39 @@ router.post('/store-owner/login', async (req, res) => {
       });
     }
 
-    // Create session
-    req.session.userId = authResult.data.user.id;
-    req.session.userType = 'store_owner';
-    req.session.email = authResult.data.user.email;
-    req.session.isNewSession = true;
-    req.session.loginTime = new Date().toISOString();
+    // Regenerate session to prevent session fixation attacks
+    req.session.regenerate((err) => {
+      if (err) {
+        console.error('Session regeneration error:', err);
+        return res.status(500).json({
+          success: false,
+          message: 'Error creating session'
+        });
+      }
 
-    res.json({
-      success: true,
-      message: 'Store owner login successful',
-      data: authResult.data
+      // Create session
+      req.session.userId = authResult.data.user.id;
+      req.session.userType = 'store_owner';
+      req.session.email = authResult.data.user.email;
+      req.session.isNewSession = true;
+      req.session.loginTime = new Date().toISOString();
+
+      // Save session before sending response
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error('Session save error:', saveErr);
+          return res.status(500).json({
+            success: false,
+            message: 'Error saving session'
+          });
+        }
+
+        res.json({
+          success: true,
+          message: 'Store owner login successful',
+          data: authResult.data
+        });
+      });
     });
 
   } catch (error) {
@@ -569,6 +685,159 @@ router.get('/admin/session-stats', authenticateSession('admin'), async (req, res
     });
   } catch (error) {
     console.error('Error fetching session stats:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/auth/forgot-password - Request password reset
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // Validation
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+
+    if (!validateEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address'
+      });
+    }
+
+    // Check which table the user exists in
+    const tables = [
+      { name: 'customers', type: 'customer' },
+      { name: 'store_owners', type: 'store_owner' },
+      { name: 'admins', type: 'admin' }
+    ];
+
+    let userFound = false;
+    let userType = null;
+    let fullName = null;
+
+    for (const table of tables) {
+      const result = await pool.query(
+        `SELECT id, full_name FROM ${table.name} WHERE email = $1`,
+        [email]
+      );
+
+      if (result.rows.length > 0) {
+        userFound = true;
+        userType = table.type;
+        fullName = result.rows[0].full_name;
+        break;
+      }
+    }
+
+    // Always return success to prevent email enumeration attacks
+    if (!userFound) {
+      return res.json({
+        success: true,
+        message: 'If an account with that email exists, a password reset link has been sent.'
+      });
+    }
+
+    // Create reset token
+    const tokenResult = await createPasswordResetToken(email, userType);
+
+    if (!tokenResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Error creating reset token'
+      });
+    }
+
+    // Send reset email
+    const emailResult = await sendPasswordResetEmail(email, tokenResult.token, fullName);
+
+    res.json({
+      success: true,
+      message: 'If an account with that email exists, a password reset link has been sent.',
+      ...(process.env.NODE_ENV === 'development' && emailResult.resetUrl && {
+        devResetUrl: emailResult.resetUrl // Only in development
+      })
+    });
+
+  } catch (error) {
+    console.error('Forgot password error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /api/auth/reset-password - Reset password with token
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    // Validation
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token and new password are required'
+      });
+    }
+
+    if (!validatePassword(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long'
+      });
+    }
+
+    // Verify reset token
+    const verifyResult = await verifyResetToken(token);
+
+    if (!verifyResult.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token'
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password in the appropriate table
+    const tableMap = {
+      'customer': 'customers',
+      'store_owner': 'store_owners',
+      'admin': 'admins'
+    };
+
+    const tableName = tableMap[verifyResult.userType];
+
+    await pool.query(
+      `UPDATE ${tableName}
+       SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE email = $2`,
+      [passwordHash, verifyResult.user.email]
+    );
+
+    // Clear reset token
+    await clearResetToken(verifyResult.user.email, verifyResult.userType);
+
+    // Destroy all existing sessions for security
+    await destroyUserSessions(verifyResult.user.id, verifyResult.userType);
+
+    res.json({
+      success: true,
+      message: 'Password reset successful. Please log in with your new password.'
+    });
+
+  } catch (error) {
+    console.error('Reset password error:', error.message);
     res.status(500).json({
       success: false,
       message: 'Internal server error'

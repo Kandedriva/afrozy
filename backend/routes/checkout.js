@@ -342,6 +342,8 @@ router.post('/confirm', extractUserOrSession, async (req, res) => {
           const primaryStoreId = storeIds[0];
           const otherStores = stores.filter(store => store.id.toString() !== primaryStoreId);
 
+          const failedTransfers = [];
+
           for (const store of otherStores) {
             const storeItems = itemsByStore[store.id];
             if (storeItems && storeItems.length > 0) {
@@ -353,24 +355,88 @@ router.post('/confirm', extractUserOrSession, async (req, res) => {
               const platformFeePercent = 0.03;
               const transferAmount = Math.round(storeAmount * (1 - platformFeePercent) * 100);
 
-              try {
-                await stripe.transfers.create({
+              // Retry logic for failed transfers
+              let transferSuccess = false;
+              let lastError = null;
+              const maxRetries = 3;
+
+              for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                  await stripe.transfers.create({
+                    amount: transferAmount,
+                    currency: 'usd',
+                    destination: store.stripe_connect_account_id,
+                    metadata: {
+                      orderId: order.id.toString(),
+                      storeId: store.id.toString(),
+                      storeName: store.store_name,
+                    },
+                  });
+
+                  console.log(`✅ Transfer created for store ${store.store_name}: $${transferAmount / 100}`);
+                  transferSuccess = true;
+                  break; // Success, exit retry loop
+                } catch (transferError) {
+                  lastError = transferError;
+                  console.error(`❌ Transfer attempt ${attempt}/${maxRetries} failed for store ${store.store_name}:`, transferError.message);
+
+                  if (attempt < maxRetries) {
+                    // Wait before retry (exponential backoff)
+                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                  }
+                }
+              }
+
+              // If all retries failed, log for manual review
+              if (!transferSuccess) {
+                failedTransfers.push({
+                  storeId: store.id,
+                  storeName: store.store_name,
                   amount: transferAmount,
-                  currency: 'usd',
-                  destination: store.stripe_connect_account_id,
-                  metadata: {
-                    orderId: order.id.toString(),
-                    storeId: store.id.toString(),
-                    storeName: store.store_name,
-                  },
+                  accountId: store.stripe_connect_account_id,
+                  error: lastError.message
                 });
-                
-                console.log(`Transfer created for store ${store.store_name}: $${transferAmount / 100}`);
-              } catch (transferError) {
-                console.error(`Transfer failed for store ${store.store_name}:`, transferError);
-                // Don't fail the entire order for transfer errors, but log them
+
+                // Store failed transfer in database for admin review
+                try {
+                  await client.query(`
+                    INSERT INTO failed_transfers
+                    (order_id, store_id, store_name, amount_cents, stripe_account_id, error_message, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, NOW())
+                  `, [
+                    order.id,
+                    store.id,
+                    store.store_name,
+                    transferAmount,
+                    store.stripe_connect_account_id,
+                    lastError.message
+                  ]);
+                  console.warn(`⚠️  Failed transfer logged for admin review: Order ${order.id}, Store ${store.store_name}`);
+                } catch (logError) {
+                  // If failed_transfers table doesn't exist, just log to console
+                  console.error('Could not log failed transfer to database:', logError.message);
+                  console.error('CRITICAL: Manual transfer needed for:', {
+                    orderId: order.id,
+                    storeId: store.id,
+                    storeName: store.store_name,
+                    amount: transferAmount / 100,
+                    accountId: store.stripe_connect_account_id
+                  });
+                }
               }
             }
+          }
+
+          // If there were failed transfers, add note to order
+          if (failedTransfers.length > 0) {
+            await client.query(`
+              UPDATE orders
+              SET notes = COALESCE(notes || E'\n', '') || $1
+              WHERE id = $2
+            `, [
+              `⚠️ ${failedTransfers.length} transfer(s) failed and require manual processing`,
+              order.id
+            ]);
           }
         }
 

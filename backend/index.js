@@ -6,6 +6,29 @@ const morgan = require('morgan');
 const session = require('express-session');
 require('dotenv').config();
 
+// Validate required environment variables on startup
+const requiredEnvVars = [
+  'DATABASE_URL',
+  'SESSION_SECRET',
+  'R2_ACCOUNT_ID',
+  'R2_ACCESS_KEY_ID',
+  'R2_SECRET_ACCESS_KEY',
+  'R2_BUCKET_NAME',
+  'STRIPE_SECRET_KEY',
+  'STRIPE_PUBLISHABLE_KEY'
+];
+
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.error('\x1b[31m%s\x1b[0m', '❌ ERROR: Missing required environment variables:');
+  missingEnvVars.forEach(varName => {
+    console.error('\x1b[31m%s\x1b[0m', `   - ${varName}`);
+  });
+  console.error('\x1b[33m%s\x1b[0m', '\nPlease configure these variables in your .env file before starting the server.');
+  process.exit(1);
+}
+
 const { connectDB, closePool } = require('./config/database');
 const logger = require('./config/logger');
 const { corsOptions, helmetOptions, generalLimiter } = require('./config/security');
@@ -18,6 +41,8 @@ const createOrdersTable = require('./scripts/createOrdersTable');
 const updateOrdersTableForCheckout = require('./scripts/updateOrdersTableForCheckout');
 const addDeliveryFieldsToOrders = require('./scripts/addDeliveryFieldsToOrders');
 const addStripeConnectToStores = require('./scripts/addStripeConnectToStores');
+const addPasswordResetFields = require('./scripts/addPasswordResetFields');
+const createFailedTransfersTable = require('./scripts/createFailedTransfersTable');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -238,6 +263,8 @@ const startServer = async () => {
     await updateOrdersTableForCheckout();
     await addDeliveryFieldsToOrders();
     await addStripeConnectToStores();
+    await addPasswordResetFields();
+    await createFailedTransfersTable();
     logger.info('Database tables initialized');
 
     // Check R2 configuration
