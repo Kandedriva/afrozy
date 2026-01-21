@@ -2,7 +2,7 @@
   "name": "afrozy-frontend",
   "version": "1.0.0",
   "private": true,
-  "homepage": ".",
+  "homepage": "/",
   "dependencies": {
     "@stripe/react-stripe-js": "^5.4.1",
     "@stripe/stripe-js": "^8.5.3",

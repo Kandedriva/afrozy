@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from '../../utils/axios';
 
 interface SettingsData {
   general: {
@@ -74,7 +75,46 @@ const Settings: React.FC = () => {
 
   const [isSaving, setIsSaving] = useState(false);
 
+  // Account settings state
+  const [adminProfile, setAdminProfile] = useState({
+    email: '',
+    fullName: '',
+    username: ''
+  });
+  const [emailForm, setEmailForm] = useState({
+    newEmail: '',
+    currentPassword: ''
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [accountLoading, setAccountLoading] = useState(false);
+  const [accountMessage, setAccountMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  // Fetch admin profile on mount
+  useEffect(() => {
+    fetchAdminProfile();
+  }, []);
+
+  const fetchAdminProfile = async () => {
+    try {
+      const response = await axios.get('/auth/profile');
+      if (response.data.success) {
+        setAdminProfile({
+          email: response.data.data.email,
+          fullName: response.data.data.full_name || '',
+          username: response.data.data.username || ''
+        });
+      }
+    } catch (error: any) {
+      console.error('Error fetching admin profile:', error);
+    }
+  };
+
   const tabs = [
+    { id: 'account', name: 'My Account', icon: '👤' },
     { id: 'general', name: 'General', icon: '⚙️' },
     { id: 'shipping', name: 'Shipping', icon: '🚚' },
     { id: 'payment', name: 'Payment', icon: '💳' },
@@ -102,6 +142,71 @@ const Settings: React.FC = () => {
       console.error('Error saving settings:', error);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleEmailUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAccountLoading(true);
+    setAccountMessage(null);
+
+    try {
+      const response = await axios.put('/auth/profile/email', {
+        newEmail: emailForm.newEmail,
+        currentPassword: emailForm.currentPassword
+      });
+
+      if (response.data.success) {
+        setAccountMessage({ type: 'success', text: 'Email updated successfully!' });
+        setAdminProfile(prev => ({ ...prev, email: emailForm.newEmail }));
+        setEmailForm({ newEmail: '', currentPassword: '' });
+      }
+    } catch (error: any) {
+      setAccountMessage({
+        type: 'error',
+        text: error.response?.data?.message || 'Failed to update email'
+      });
+    } finally {
+      setAccountLoading(false);
+    }
+  };
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAccountLoading(true);
+    setAccountMessage(null);
+
+    // Validate passwords match
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setAccountMessage({ type: 'error', text: 'New passwords do not match' });
+      setAccountLoading(false);
+      return;
+    }
+
+    // Validate password length
+    if (passwordForm.newPassword.length < 6) {
+      setAccountMessage({ type: 'error', text: 'Password must be at least 6 characters' });
+      setAccountLoading(false);
+      return;
+    }
+
+    try {
+      const response = await axios.put('/auth/profile/password', {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword
+      });
+
+      if (response.data.success) {
+        setAccountMessage({ type: 'success', text: 'Password updated successfully!' });
+        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      }
+    } catch (error: any) {
+      setAccountMessage({
+        type: 'error',
+        text: error.response?.data?.message || 'Failed to update password'
+      });
+    } finally {
+      setAccountLoading(false);
     }
   };
 
@@ -373,6 +478,125 @@ const Settings: React.FC = () => {
     </div>
   );
 
+  const renderAccountSettings = () => (
+    <div className="space-y-6">
+      {/* Success/Error Message */}
+      {accountMessage && (
+        <div className={`p-4 rounded-md ${accountMessage.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+          {accountMessage.text}
+        </div>
+      )}
+
+      {/* Profile Information */}
+      <div>
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Profile Information</h3>
+        <div className="bg-gray-50 p-4 rounded-md space-y-2">
+          <div className="flex justify-between">
+            <span className="text-sm font-medium text-gray-700">Email:</span>
+            <span className="text-sm text-gray-900">{adminProfile.email}</span>
+          </div>
+          {adminProfile.fullName && (
+            <div className="flex justify-between">
+              <span className="text-sm font-medium text-gray-700">Name:</span>
+              <span className="text-sm text-gray-900">{adminProfile.fullName}</span>
+            </div>
+          )}
+          {adminProfile.username && (
+            <div className="flex justify-between">
+              <span className="text-sm font-medium text-gray-700">Username:</span>
+              <span className="text-sm text-gray-900">{adminProfile.username}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Update Email Section */}
+      <div>
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Update Email Address</h3>
+        <form onSubmit={handleEmailUpdate} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">New Email Address</label>
+            <input
+              type="email"
+              value={emailForm.newEmail}
+              onChange={(e) => setEmailForm(prev => ({ ...prev, newEmail: e.target.value }))}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="newemail@example.com"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+            <input
+              type="password"
+              value={emailForm.currentPassword}
+              onChange={(e) => setEmailForm(prev => ({ ...prev, currentPassword: e.target.value }))}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter your current password"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">Required to confirm your identity</p>
+          </div>
+          <button
+            type="submit"
+            disabled={accountLoading}
+            className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50"
+          >
+            {accountLoading ? 'Updating...' : 'Update Email'}
+          </button>
+        </form>
+      </div>
+
+      {/* Update Password Section */}
+      <div>
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
+        <form onSubmit={handlePasswordUpdate} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+            <input
+              type="password"
+              value={passwordForm.currentPassword}
+              onChange={(e) => setPasswordForm(prev => ({ ...prev, currentPassword: e.target.value }))}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter your current password"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+            <input
+              type="password"
+              value={passwordForm.newPassword}
+              onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter new password"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">Must be at least 6 characters long</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+            <input
+              type="password"
+              value={passwordForm.confirmPassword}
+              onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Confirm new password"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={accountLoading}
+            className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50"
+          >
+            {accountLoading ? 'Updating...' : 'Change Password'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+
   const renderSecuritySettings = () => (
     <div className="space-y-6">
       <div>
@@ -438,6 +662,8 @@ const Settings: React.FC = () => {
 
   const renderContent = () => {
     switch (activeTab) {
+      case 'account':
+        return renderAccountSettings();
       case 'general':
         return renderGeneralSettings();
       case 'shipping':
@@ -449,7 +675,7 @@ const Settings: React.FC = () => {
       case 'security':
         return renderSecuritySettings();
       default:
-        return renderGeneralSettings();
+        return renderAccountSettings();
     }
   };
 

@@ -44,9 +44,9 @@ function AppContent() {
           
           // Use session-based validation for all user types
           try {
-            const apiUrl = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
+            const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
             let validationEndpoint;
-            
+
             // Choose appropriate validation endpoint based on user type
             if (parsedUser.user_type === 'store_owner') {
               validationEndpoint = `${apiUrl}/store/products`;
@@ -177,7 +177,7 @@ function AppContent() {
   const handleLogout = async () => {
     try {
       // Call logout API to destroy session
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://localhost:3001/api';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
       await fetch(`${apiUrl}/store/logout`, {
         method: 'POST',
         credentials: 'include'

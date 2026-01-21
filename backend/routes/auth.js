@@ -845,6 +845,229 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
+// Get Admin Profile
+router.get('/profile', authenticateSession('admin'), async (req, res) => {
+  try {
+    const query = `
+      SELECT id, email, username, full_name, created_at
+      FROM admins
+      WHERE id = $1
+    `;
+
+    const result = await pool.query(query, [req.session.userId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin profile not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Get profile error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Update Admin Email
+router.put('/profile/email', authenticateSession('admin'), async (req, res) => {
+  try {
+    const { newEmail, currentPassword } = req.body;
+
+    // Validation
+    if (!newEmail || !currentPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'New email and current password are required'
+      });
+    }
+
+    if (!validateEmail(newEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address'
+      });
+    }
+
+    // Get current admin data
+    const adminQuery = `
+      SELECT id, email, password_hash
+      FROM admins
+      WHERE id = $1
+    `;
+
+    const adminResult = await pool.query(adminQuery, [req.session.userId]);
+
+    if (adminResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found'
+      });
+    }
+
+    const admin = adminResult.rows[0];
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(currentPassword, admin.password_hash);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: 'Current password is incorrect'
+      });
+    }
+
+    // Check if new email already exists
+    const emailCheckQuery = `
+      SELECT id FROM admins WHERE email = $1 AND id != $2
+    `;
+
+    const emailCheckResult = await pool.query(emailCheckQuery, [newEmail, req.session.userId]);
+
+    if (emailCheckResult.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is already in use by another account'
+      });
+    }
+
+    // Update email
+    const updateQuery = `
+      UPDATE admins
+      SET email = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, email, username, full_name
+    `;
+
+    const updateResult = await pool.query(updateQuery, [newEmail, req.session.userId]);
+
+    // Update session email
+    req.session.email = newEmail;
+
+    res.json({
+      success: true,
+      message: 'Email updated successfully',
+      data: updateResult.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Update email error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Update Admin Password
+router.put('/profile/password', authenticateSession('admin'), async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    // Validation
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Current password and new password are required'
+      });
+    }
+
+    if (!validatePassword(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long'
+      });
+    }
+
+    // Get current admin data
+    const adminQuery = `
+      SELECT id, email, password_hash
+      FROM admins
+      WHERE id = $1
+    `;
+
+    const adminResult = await pool.query(adminQuery, [req.session.userId]);
+
+    if (adminResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found'
+      });
+    }
+
+    const admin = adminResult.rows[0];
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(currentPassword, admin.password_hash);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: 'Current password is incorrect'
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password
+    const updateQuery = `
+      UPDATE admins
+      SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+    `;
+
+    await pool.query(updateQuery, [newPasswordHash, req.session.userId]);
+
+    // Regenerate session for security
+    req.session.regenerate((err) => {
+      if (err) {
+        console.error('Session regeneration error:', err);
+        return res.status(500).json({
+          success: false,
+          message: 'Error updating session'
+        });
+      }
+
+      // Restore session data
+      req.session.userId = admin.id;
+      req.session.userType = 'admin';
+      req.session.email = admin.email;
+
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error('Session save error:', saveErr);
+          return res.status(500).json({
+            success: false,
+            message: 'Error saving session'
+          });
+        }
+
+        res.json({
+          success: true,
+          message: 'Password updated successfully'
+        });
+      });
+    });
+
+  } catch (error) {
+    console.error('Update password error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
 // Export middleware functions for use in other routes using the utils
 const authenticateAdmin = authenticateSession('admin');
 
