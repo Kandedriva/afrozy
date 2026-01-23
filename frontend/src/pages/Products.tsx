@@ -38,6 +38,7 @@ const Products: React.FC<ProductsProps> = ({ user, onLogout, onNavigate }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { toggleCart, getTotalItems } = useCart();
 
   const categories = ['all', 'Electronics', 'Clothing', 'Home & Kitchen', 'Fitness', 'Accessories', 'Home & Garden'];
@@ -110,7 +111,79 @@ const Products: React.FC<ProductsProps> = ({ user, onLogout, onNavigate }) => {
             </div>
           </div>
           
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            {/* Mobile Menu Button */}
+            <div className="relative sm:hidden">
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="p-3 hover:bg-blue-700 rounded-md transition-colors duration-200"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+
+              {/* Mobile Dropdown Menu */}
+              {isMobileMenuOpen && (
+                <>
+                  {/* Backdrop */}
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  />
+
+                  {/* Dropdown */}
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl z-50 overflow-hidden">
+                    <button
+                      onClick={() => {
+                        onNavigate?.('/stores');
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="w-full flex items-center space-x-3 px-4 py-3 text-gray-700 hover:bg-orange-50 transition-colors border-b border-gray-100"
+                    >
+                      <div className="flex items-center justify-center w-8 h-8 bg-orange-600 rounded-md">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      </div>
+                      <span className="font-medium">Browse Stores</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        onNavigate?.('/store/register');
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="w-full flex items-center space-x-3 px-4 py-3 text-gray-700 hover:bg-purple-50 transition-colors border-b border-gray-100"
+                    >
+                      <div className="flex items-center justify-center w-8 h-8 bg-purple-600 rounded-md">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                      </div>
+                      <span className="font-medium">Sell on Afrozy</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        onNavigate?.('/driver');
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="w-full flex items-center space-x-3 px-4 py-3 text-gray-700 hover:bg-green-50 transition-colors"
+                    >
+                      <div className="flex items-center justify-center w-8 h-8 bg-green-600 rounded-md">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <span className="font-medium">Driver Portal</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Desktop Links (hidden on mobile) */}
             {/* Browse Stores Link */}
             <button
               onClick={() => onNavigate?.('/stores')}
