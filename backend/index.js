@@ -15,7 +15,8 @@ const requiredEnvVars = [
   'R2_SECRET_ACCESS_KEY',
   'R2_BUCKET_NAME',
   'STRIPE_SECRET_KEY',
-  'STRIPE_PUBLISHABLE_KEY'
+  'STRIPE_PUBLISHABLE_KEY',
+  'STRIPE_WEBHOOK_SECRET'
 ];
 
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
