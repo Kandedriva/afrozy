@@ -138,8 +138,12 @@ router.post('/process', extractUserOrSession, async (req, res) => {
       }
     }
 
-    // Group cart items by store for multi-vendor checkout
-    const itemsByStore = cartItems.reduce((acc, item) => {
+    // Separate platform products (store_id is NULL) from store products
+    const platformItems = cartItems.filter(item => item.store_id === null);
+    const storeItems = cartItems.filter(item => item.store_id !== null);
+
+    // Group store items by store for multi-vendor checkout
+    const itemsByStore = storeItems.reduce((acc, item) => {
       if (!acc[item.store_id]) {
         acc[item.store_id] = [];
       }
@@ -152,58 +156,116 @@ router.post('/process', extractUserOrSession, async (req, res) => {
       return total + (parseFloat(item.price) * item.quantity);
     }, 0);
 
-    // Get store information and Stripe accounts for all stores in the cart
-    const storeIds = Object.keys(itemsByStore);
-    const storeQuery = `
-      SELECT id, store_name, stripe_connect_account_id, stripe_account_status
-      FROM stores 
-      WHERE id = ANY($1)
-    `;
-    const storeResult = await client.query(storeQuery, [storeIds]);
-    const stores = storeResult.rows;
+    // Calculate platform products amount (no commission)
+    const platformAmount = platformItems.reduce((total, item) => {
+      return total + (parseFloat(item.price) * item.quantity);
+    }, 0);
 
-    // Check if all stores have connected Stripe accounts
-    const storesWithoutStripe = stores.filter(store => 
-      !store.stripe_connect_account_id || store.stripe_account_status !== 'connected'
-    );
+    // Calculate store products amount (10% commission)
+    const storeAmount = storeItems.reduce((total, item) => {
+      return total + (parseFloat(item.price) * item.quantity);
+    }, 0);
 
-    if (storesWithoutStripe.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        success: false,
-        message: `Some stores haven't set up payments yet: ${storesWithoutStripe.map(s => s.store_name).join(', ')}`,
-        unavailableStores: storesWithoutStripe.map(s => s.store_name)
+    let paymentIntent;
+    let isMultiVendor = false;
+    let storeIds = [];
+
+    // Check if there are store items that need Stripe Connect
+    if (storeItems.length > 0) {
+      // Get store information and Stripe accounts for all stores in the cart
+      storeIds = Object.keys(itemsByStore);
+      const storeQuery = `
+        SELECT id, store_name, stripe_connect_account_id, stripe_account_status
+        FROM stores
+        WHERE id = ANY($1)
+      `;
+      const storeResult = await client.query(storeQuery, [storeIds]);
+      const stores = storeResult.rows;
+
+      // Check if all stores have connected Stripe accounts
+      const storesWithoutStripe = stores.filter(store =>
+        !store.stripe_connect_account_id || store.stripe_account_status !== 'connected'
+      );
+
+      if (storesWithoutStripe.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          message: `Some stores haven't set up payments yet: ${storesWithoutStripe.map(s => s.store_name).join(', ')}`,
+          unavailableStores: storesWithoutStripe.map(s => s.store_name)
+        });
+      }
+
+      // If cart has BOTH platform and store items OR multiple stores
+      if (platformItems.length > 0 || storeIds.length > 1) {
+        // Complex scenario: Direct charge to platform account, then transfer to stores
+        isMultiVendor = true;
+
+        // Create direct charge to platform account
+        paymentIntent = await stripe.paymentIntents.create({
+          amount: Math.round(totalAmount * 100), // Convert to cents
+          currency: 'usd',
+          metadata: {
+            userId: req.userId || 'guest',
+            sessionId: req.sessionId || '',
+            orderType: 'cart_checkout',
+            customerName: deliveryInfo.fullName,
+            customerEmail: deliveryInfo.email,
+            storeIds: storeIds.join(','),
+            multiVendor: 'true',
+            platformAmount: Math.round(platformAmount * 100).toString(),
+            storeAmount: Math.round(storeAmount * 100).toString(),
+            hasPlatformItems: platformItems.length > 0 ? 'true' : 'false',
+            hasStoreItems: storeItems.length > 0 ? 'true' : 'false'
+          },
+          payment_method_types: ['card'],
+        });
+      } else {
+        // Simple scenario: Single store, no platform items
+        // Use destination charge with 10% application fee
+        const primaryStore = stores[0];
+        const applicationFeePercent = 0.10; // 10% platform commission
+        const applicationFeeAmount = Math.round(storeAmount * applicationFeePercent * 100);
+
+        paymentIntent = await stripe.paymentIntents.create({
+          amount: Math.round(totalAmount * 100), // Convert to cents
+          currency: 'usd',
+          application_fee_amount: applicationFeeAmount,
+          transfer_data: {
+            destination: primaryStore.stripe_connect_account_id,
+          },
+          metadata: {
+            userId: req.userId || 'guest',
+            sessionId: req.sessionId || '',
+            orderType: 'cart_checkout',
+            customerName: deliveryInfo.fullName,
+            customerEmail: deliveryInfo.email,
+            storeIds: storeIds.join(','),
+            multiVendor: 'false',
+            storeId: primaryStore.id.toString(),
+            storeName: primaryStore.store_name,
+            platformFee: applicationFeeAmount.toString()
+          },
+          payment_method_types: ['card'],
+        });
+      }
+    } else {
+      // Only platform items - direct charge to platform account, no commission
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(totalAmount * 100), // Convert to cents
+        currency: 'usd',
+        metadata: {
+          userId: req.userId || 'guest',
+          sessionId: req.sessionId || '',
+          orderType: 'cart_checkout',
+          customerName: deliveryInfo.fullName,
+          customerEmail: deliveryInfo.email,
+          platformOnly: 'true',
+          platformAmount: Math.round(platformAmount * 100).toString()
+        },
+        payment_method_types: ['card'],
       });
     }
-
-    // Calculate application fee (platform fee) - 3% of total
-    const applicationFeePercent = 0.03;
-    const applicationFeeAmount = Math.round(totalAmount * applicationFeePercent * 100);
-
-    // For multi-vendor, we'll use the first store's connected account as the main account
-    // and transfer to other accounts. Alternatively, you could create separate payment intents
-    const primaryStore = stores[0];
-
-    // Create payment intent with the primary store account
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(totalAmount * 100), // Convert to cents
-      currency: 'usd',
-      application_fee_amount: applicationFeeAmount,
-      on_behalf_of: primaryStore.stripe_connect_account_id,
-      transfer_data: {
-        destination: primaryStore.stripe_connect_account_id,
-      },
-      metadata: {
-        userId: req.userId || 'guest',
-        sessionId: req.sessionId || '',
-        orderType: 'cart_checkout',
-        customerName: deliveryInfo.fullName,
-        customerEmail: deliveryInfo.email,
-        storeIds: storeIds.join(','),
-        multiVendor: storeIds.length > 1 ? 'true' : 'false'
-      },
-      payment_method_types: ['card'],
-    });
 
     // Create order record with delivery information
     const orderInsertQuery = `
@@ -314,129 +376,140 @@ router.post('/confirm', extractUserOrSession, async (req, res) => {
         const order = orderResult.rows[0];
         const orderItems = JSON.parse(order.items);
         
-        // Handle multi-vendor transfers if needed
+        // Handle transfers based on payment type
         const isMultiVendor = paymentIntent.metadata?.multiVendor === 'true';
-        
-        if (isMultiVendor && paymentIntent.metadata?.storeIds) {
-          const storeIds = paymentIntent.metadata.storeIds.split(',');
-          
-          // Group items by store and calculate amounts
-          const itemsByStore = orderItems.reduce((acc, item) => {
-            if (!acc[item.store_id]) {
-              acc[item.store_id] = [];
-            }
-            acc[item.store_id].push(item);
-            return acc;
-          }, {});
+        const platformOnly = paymentIntent.metadata?.platformOnly === 'true';
 
-          // Get store Stripe accounts
-          const storeQuery = `
-            SELECT id, stripe_connect_account_id, store_name
-            FROM stores 
-            WHERE id = ANY($1) AND stripe_connect_account_id IS NOT NULL
-          `;
-          const storeResult = await client.query(storeQuery, [storeIds]);
-          const stores = storeResult.rows;
+        // Skip transfers for platform-only orders (no commission, no stores involved)
+        if (!platformOnly && paymentIntent.metadata?.storeIds) {
+          const storeIds = paymentIntent.metadata.storeIds.split(',').filter(id => id);
 
-          // Create transfers to other stores (excluding primary store that received the payment)
-          const primaryStoreId = storeIds[0];
-          const otherStores = stores.filter(store => store.id.toString() !== primaryStoreId);
+          if (storeIds.length > 0) {
+            // Group items by store and calculate amounts
+            const itemsByStore = orderItems.reduce((acc, item) => {
+              // Skip platform items (store_id is null)
+              if (item.store_id) {
+                if (!acc[item.store_id]) {
+                  acc[item.store_id] = [];
+                }
+                acc[item.store_id].push(item);
+              }
+              return acc;
+            }, {});
 
-          const failedTransfers = [];
+            // Get store Stripe accounts
+            const storeQuery = `
+              SELECT id, stripe_connect_account_id, store_name
+              FROM stores
+              WHERE id = ANY($1) AND stripe_connect_account_id IS NOT NULL
+            `;
+            const storeResult = await client.query(storeQuery, [storeIds]);
+            const stores = storeResult.rows;
 
-          for (const store of otherStores) {
-            const storeItems = itemsByStore[store.id];
-            if (storeItems && storeItems.length > 0) {
-              const storeAmount = storeItems.reduce((total, item) => {
-                return total + (parseFloat(item.price) * item.quantity);
-              }, 0);
+            const failedTransfers = [];
+            const platformFeePercent = 0.10; // 10% platform commission
 
-              // Create transfer to this store (minus platform fee)
-              const platformFeePercent = 0.03;
-              const transferAmount = Math.round(storeAmount * (1 - platformFeePercent) * 100);
+            // If multi-vendor (platform items + store items OR multiple stores)
+            // Create transfers to ALL stores with 10% platform commission
+            if (isMultiVendor) {
+              for (const store of stores) {
+                const storeItems = itemsByStore[store.id];
+                if (storeItems && storeItems.length > 0) {
+                  const storeAmount = storeItems.reduce((total, item) => {
+                    return total + (parseFloat(item.price) * item.quantity);
+                  }, 0);
 
-              // Retry logic for failed transfers
-              let transferSuccess = false;
-              let lastError = null;
-              const maxRetries = 3;
+                  // Transfer 90% to store (10% stays with platform)
+                  const transferAmount = Math.round(storeAmount * (1 - platformFeePercent) * 100);
 
-              for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                  await stripe.transfers.create({
-                    amount: transferAmount,
-                    currency: 'usd',
-                    destination: store.stripe_connect_account_id,
-                    metadata: {
-                      orderId: order.id.toString(),
-                      storeId: store.id.toString(),
+                  // Retry logic for failed transfers
+                  let transferSuccess = false;
+                  let lastError = null;
+                  const maxRetries = 3;
+
+                  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    try {
+                      await stripe.transfers.create({
+                        amount: transferAmount,
+                        currency: 'usd',
+                        destination: store.stripe_connect_account_id,
+                        metadata: {
+                          orderId: order.id.toString(),
+                          storeId: store.id.toString(),
+                          storeName: store.store_name,
+                          platformFeePercent: '10',
+                          storeItemsAmount: Math.round(storeAmount * 100).toString()
+                        },
+                      });
+
+                      console.log(`✅ Transfer created for store ${store.store_name}: $${transferAmount / 100} (90% of $${storeAmount})`);
+                      transferSuccess = true;
+                      break; // Success, exit retry loop
+                    } catch (transferError) {
+                      lastError = transferError;
+                      console.error(`❌ Transfer attempt ${attempt}/${maxRetries} failed for store ${store.store_name}:`, transferError.message);
+
+                      if (attempt < maxRetries) {
+                        // Wait before retry (exponential backoff)
+                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                      }
+                    }
+                  }
+
+                  // If all retries failed, log for manual review
+                  if (!transferSuccess) {
+                    failedTransfers.push({
+                      storeId: store.id,
                       storeName: store.store_name,
-                    },
-                  });
+                      amount: transferAmount,
+                      accountId: store.stripe_connect_account_id,
+                      error: lastError.message
+                    });
 
-                  console.log(`✅ Transfer created for store ${store.store_name}: $${transferAmount / 100}`);
-                  transferSuccess = true;
-                  break; // Success, exit retry loop
-                } catch (transferError) {
-                  lastError = transferError;
-                  console.error(`❌ Transfer attempt ${attempt}/${maxRetries} failed for store ${store.store_name}:`, transferError.message);
-
-                  if (attempt < maxRetries) {
-                    // Wait before retry (exponential backoff)
-                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                    // Store failed transfer in database for admin review
+                    try {
+                      await client.query(`
+                        INSERT INTO failed_transfers
+                        (order_id, store_id, store_name, amount_cents, stripe_account_id, error_message, created_at)
+                        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+                      `, [
+                        order.id,
+                        store.id,
+                        store.store_name,
+                        transferAmount,
+                        store.stripe_connect_account_id,
+                        lastError.message
+                      ]);
+                      console.warn(`⚠️  Failed transfer logged for admin review: Order ${order.id}, Store ${store.store_name}`);
+                    } catch (logError) {
+                      // If failed_transfers table doesn't exist, just log to console
+                      console.error('Could not log failed transfer to database:', logError.message);
+                      console.error('CRITICAL: Manual transfer needed for:', {
+                        orderId: order.id,
+                        storeId: store.id,
+                        storeName: store.store_name,
+                        amount: transferAmount / 100,
+                        accountId: store.stripe_connect_account_id
+                      });
+                    }
                   }
                 }
               }
-
-              // If all retries failed, log for manual review
-              if (!transferSuccess) {
-                failedTransfers.push({
-                  storeId: store.id,
-                  storeName: store.store_name,
-                  amount: transferAmount,
-                  accountId: store.stripe_connect_account_id,
-                  error: lastError.message
-                });
-
-                // Store failed transfer in database for admin review
-                try {
-                  await client.query(`
-                    INSERT INTO failed_transfers
-                    (order_id, store_id, store_name, amount_cents, stripe_account_id, error_message, created_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, NOW())
-                  `, [
-                    order.id,
-                    store.id,
-                    store.store_name,
-                    transferAmount,
-                    store.stripe_connect_account_id,
-                    lastError.message
-                  ]);
-                  console.warn(`⚠️  Failed transfer logged for admin review: Order ${order.id}, Store ${store.store_name}`);
-                } catch (logError) {
-                  // If failed_transfers table doesn't exist, just log to console
-                  console.error('Could not log failed transfer to database:', logError.message);
-                  console.error('CRITICAL: Manual transfer needed for:', {
-                    orderId: order.id,
-                    storeId: store.id,
-                    storeName: store.store_name,
-                    amount: transferAmount / 100,
-                    accountId: store.stripe_connect_account_id
-                  });
-                }
-              }
             }
-          }
+            // If single store with destination charge, platform fee is already handled by Stripe
+            // No manual transfers needed as the 10% fee was set in application_fee_amount
 
-          // If there were failed transfers, add note to order
-          if (failedTransfers.length > 0) {
-            await client.query(`
-              UPDATE orders
-              SET notes = COALESCE(notes || E'\n', '') || $1
-              WHERE id = $2
-            `, [
-              `⚠️ ${failedTransfers.length} transfer(s) failed and require manual processing`,
-              order.id
-            ]);
+            // If there were failed transfers, add note to order
+            if (failedTransfers.length > 0) {
+              await client.query(`
+                UPDATE orders
+                SET notes = COALESCE(notes || E'\n', '') || $1
+                WHERE id = $2
+              `, [
+                `⚠️ ${failedTransfers.length} transfer(s) failed and require manual processing`,
+                order.id
+              ]);
+            }
           }
         }
 
