@@ -27,6 +27,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onLogout }) => {
   // Profile form state
   const [profileForm, setProfileForm] = useState({
     fullName: user.full_name || '',
+    username: user.username || '',
     email: user.email || '',
     phone: user.phone || '',
     address: user.address || ''
@@ -56,97 +57,35 @@ const Settings: React.FC<SettingsProps> = ({ user, onLogout }) => {
     e.preventDefault();
     setLoading(true);
 
-    const requestId = Date.now(); // Unique ID for this request
-    console.log(`[${requestId}] Starting profile update request`);
-
     try {
-      const token = localStorage.getItem('afrozy-market-token');
-      
-      if (!token) {
-        console.log(`[${requestId}] No token found`);
-        showMessage('error', 'Authentication required. Please log in again.');
-        return;
-      }
-
-      console.log('Updating profile with token:', token ? 'Token exists' : 'No token');
-      console.log('Token preview:', token ? token.substring(0, 50) + '...' : 'No token');
-      console.log('API URL:', '/auth/profile');
-      console.log('Request data:', {
+      // Backend uses session-based authentication (cookies), no Bearer token needed
+      const response = await axios.put('/auth/profile', {
         fullName: profileForm.fullName,
+        username: profileForm.username,
+        email: profileForm.email,
         phone: profileForm.phone,
         address: profileForm.address
       });
-      
-      // Test if token is valid by checking its structure
-      if (token) {
-        try {
-          const tokenParts = token.split('.');
-          if (tokenParts.length !== 3) {
-            console.error('Invalid JWT token format');
-            showMessage('error', 'Invalid authentication token. Please log in again.');
-            setTimeout(() => onLogout(), 1500);
-            return;
-          }
-          
-          const payload = JSON.parse(atob(tokenParts[1]));
-          console.log('Token payload:', payload);
-          
-          // Check if token is expired
-          if (payload.exp && Date.now() >= payload.exp * 1000) {
-            console.error('Token is expired');
-            showMessage('error', 'Your session has expired. Please log in again.');
-            setTimeout(() => onLogout(), 1500);
-            return;
-          }
-        } catch (tokenError) {
-          console.error('Error parsing token:', tokenError);
-          showMessage('error', 'Invalid authentication token. Please log in again.');
-          setTimeout(() => onLogout(), 1500);
-          return;
-        }
-      }
-      
-      const response = await axios.put(
-        '/auth/profile',
-        {
-          fullName: profileForm.fullName,
-          phone: profileForm.phone,
-          address: profileForm.address
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-
-      console.log(`[${requestId}] Profile update response:`, response.data);
 
       if (response.data.success) {
-        console.log(`[${requestId}] Profile update successful`);
         showMessage('success', 'Profile updated successfully!');
-        
+
         // Use the user data returned from the backend to ensure consistency
         const updatedUser = {
           ...user,
           ...response.data.data.user
         };
-        
+
         // Update global user state (this also updates localStorage via the cart context)
         setUser(updatedUser);
       }
     } catch (error: any) {
-      console.error(`[${requestId}] Profile update error:`, error);
-      console.error('Error response:', error.response);
-      console.error('Error status:', error.response?.status);
-      console.error('Error data:', error.response?.data);
-      
+      console.error('Profile update error:', error);
+
       if (error.response?.status === 403 || error.response?.status === 401) {
-        // Token expired or invalid - clear stored data and redirect to login
+        // Session expired or invalid - redirect to login
         showMessage('error', 'Your session has expired. Please log in again.');
         setTimeout(() => {
-          // Clear stored authentication data
-          localStorage.removeItem('afrozy-market-token');
-          localStorage.removeItem('afrozy-market-user');
-          // Trigger logout which will redirect to login
           onLogout();
         }, 2000);
       } else {
@@ -159,7 +98,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onLogout }) => {
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       showMessage('error', 'New passwords do not match');
       return;
@@ -171,12 +110,31 @@ const Settings: React.FC<SettingsProps> = ({ user, onLogout }) => {
     }
 
     setLoading(true);
-    // For now, just show success message as we haven't implemented password change endpoint
-    setTimeout(() => {
-      showMessage('success', 'Password changed successfully!');
-      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+
+    try {
+      const response = await axios.put('/auth/change-password', {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword
+      });
+
+      if (response.data.success) {
+        showMessage('success', 'Password changed successfully!');
+        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      }
+    } catch (error: any) {
+      console.error('Password change error:', error);
+
+      if (error.response?.status === 403 || error.response?.status === 401) {
+        showMessage('error', 'Your session has expired. Please log in again.');
+        setTimeout(() => {
+          onLogout();
+        }, 2000);
+      } else {
+        showMessage('error', error.response?.data?.message || 'Failed to change password. Please try again.');
+      }
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -256,19 +214,32 @@ const Settings: React.FC<SettingsProps> = ({ user, onLogout }) => {
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Email Address
+                        Email Address *
                       </label>
                       <input
                         type="email"
                         value={profileForm.email}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                        disabled
+                        onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required
                       />
-                      <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
                     </div>
                   </div>
 
                   <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Username *
+                      </label>
+                      <input
+                        type="text"
+                        value={profileForm.username}
+                        onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required
+                      />
+                    </div>
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Phone Number
@@ -280,19 +251,6 @@ const Settings: React.FC<SettingsProps> = ({ user, onLogout }) => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="(555) 123-4567"
                       />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Username
-                      </label>
-                      <input
-                        type="text"
-                        value={user.username}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                        disabled
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Username cannot be changed</p>
                     </div>
                   </div>
 

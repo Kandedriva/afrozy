@@ -413,12 +413,34 @@ router.put('/profile', authenticateSession(), async (req, res) => {
   try {
     const userId = req.user.userId;
     const userType = req.user.userType;
-    const { fullName, phone, address } = req.body;
+    const { fullName, username, email, phone, address } = req.body;
 
     if (!fullName) {
       return res.status(400).json({
         success: false,
         message: 'Full name is required'
+      });
+    }
+
+    if (!username) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username is required'
+      });
+    }
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+
+    // Validate email format
+    if (!validateEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address'
       });
     }
 
@@ -436,15 +458,43 @@ router.put('/profile', authenticateSession(), async (req, res) => {
       });
     }
 
+    // Check if username is already taken by another user
+    const usernameCheck = await pool.query(
+      `SELECT id FROM ${tableName} WHERE username = $1 AND id != $2`,
+      [username, userId]
+    );
+
+    if (usernameCheck.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username is already taken'
+      });
+    }
+
+    // Check if email is already taken by another user
+    const emailCheck = await pool.query(
+      `SELECT id FROM ${tableName} WHERE email = $1 AND id != $2`,
+      [email, userId]
+    );
+
+    if (emailCheck.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is already taken'
+      });
+    }
+
     const updateQuery = `
-      UPDATE ${tableName} 
-      SET full_name = $1, phone = $2, address = $3, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $4
+      UPDATE ${tableName}
+      SET full_name = $1, username = $2, email = $3, phone = $4, address = $5, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $6
       RETURNING *
     `;
 
     const result = await pool.query(updateQuery, [
       fullName,
+      username,
+      email,
       phone || null,
       address || null,
       userId
@@ -461,6 +511,17 @@ router.put('/profile', authenticateSession(), async (req, res) => {
     delete user.password_hash;
     user.user_type = userType;
 
+    // Update session email if changed
+    if (req.session.email !== email) {
+      req.session.email = email;
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    }
+
     res.json({
       success: true,
       message: 'Profile updated successfully',
@@ -471,6 +532,89 @@ router.put('/profile', authenticateSession(), async (req, res) => {
 
   } catch (error) {
     console.error('Profile update error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// PUT /api/auth/change-password - Change user password
+router.put('/change-password', authenticateSession(), async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const userType = req.user.userType;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Current password and new password are required'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 6 characters long'
+      });
+    }
+
+    const tableMap = {
+      'admin': 'admins',
+      'customer': 'customers',
+      'store_owner': 'store_owners'
+    };
+
+    const tableName = tableMap[userType];
+    if (!tableName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user type'
+      });
+    }
+
+    // Get current user with password
+    const userResult = await pool.query(
+      `SELECT * FROM ${tableName} WHERE id = $1`,
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: 'Current password is incorrect'
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password
+    await pool.query(
+      `UPDATE ${tableName} SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+      [newPasswordHash, userId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+
+  } catch (error) {
+    console.error('Password change error:', error.message);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
