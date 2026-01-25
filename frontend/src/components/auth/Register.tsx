@@ -5,6 +5,7 @@ interface RegisterProps {
   onRegisterSuccess: (user: any, token: string) => void;
   onNavigateToLogin: () => void;
   onNavigateToStore: () => void;
+  onNavigateToVerify?: (email: string) => void;
 }
 
 interface RegisterFormData {
@@ -17,7 +18,7 @@ interface RegisterFormData {
   address: string;
 }
 
-const Register: React.FC<RegisterProps> = ({ onRegisterSuccess, onNavigateToLogin, onNavigateToStore }) => {
+const Register: React.FC<RegisterProps> = ({ onRegisterSuccess, onNavigateToLogin, onNavigateToStore, onNavigateToVerify }) => {
   const [formData, setFormData] = useState<RegisterFormData>({
     username: '',
     email: '',
@@ -95,11 +96,24 @@ const Register: React.FC<RegisterProps> = ({ onRegisterSuccess, onNavigateToLogi
     try {
       const { confirmPassword, ...submitData } = formData;
       const response = await axios.post('/auth/register', submitData);
-      
+
       if (response.data.success) {
-        const { user, token } = response.data.data;
-        
-        onRegisterSuccess(user, token);
+        // Check if email verification is required
+        if (response.data.data.requiresVerification) {
+          // Redirect to verification page
+          if (onNavigateToVerify) {
+            onNavigateToVerify(formData.email);
+          } else {
+            // Fallback: show message to user
+            setErrors({
+              general: 'Registration successful! Please check your email for a verification code.'
+            });
+          }
+        } else {
+          // Legacy flow: direct login (for backwards compatibility)
+          const { user, token } = response.data.data;
+          onRegisterSuccess(user, token);
+        }
       }
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';

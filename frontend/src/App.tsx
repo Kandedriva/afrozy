@@ -10,6 +10,7 @@ import StoreDetail from './pages/StoreDetail';
 import AdminLogin from './components/admin/AdminLogin';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
+import VerifyEmail from './components/auth/VerifyEmail';
 import StoreOwnerLogin from './components/store/StoreOwnerLogin';
 import StoreOwnerRegister from './components/store/StoreOwnerRegister';
 import { CartProvider, useCart } from './context/CartContext';
@@ -31,6 +32,7 @@ function AppContent() {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [isStoreOwnerAuthenticated, setIsStoreOwnerAuthenticated] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState<string>('');
   const { user, setUser } = useCart();
 
   // Check for existing authentication on app load
@@ -204,6 +206,16 @@ function AppContent() {
     setCurrentRoute(path);
   };
 
+  const handleNavigateToVerify = (email: string) => {
+    setVerificationEmail(email);
+    navigateTo('/verify-email');
+  };
+
+  const handleVerificationSuccess = () => {
+    // After successful verification, redirect to login
+    navigateTo('/login');
+  };
+
   // Add global click handler for navigation
   React.useEffect(() => {
     const handleLinkClick = (e: Event) => {
@@ -256,20 +268,37 @@ function AppContent() {
     // Authentication routes
     if (currentRoute === '/login') {
       return (
-        <Login 
+        <Login
           onLoginSuccess={handleLogin}
           onNavigateToRegister={() => navigateTo('/register')}
           onNavigateToStore={() => navigateTo('/')}
+          onNavigateToVerify={handleNavigateToVerify}
         />
       );
     }
 
     if (currentRoute === '/register') {
       return (
-        <Register 
+        <Register
           onRegisterSuccess={handleRegister}
           onNavigateToLogin={() => navigateTo('/login')}
           onNavigateToStore={() => navigateTo('/')}
+          onNavigateToVerify={handleNavigateToVerify}
+        />
+      );
+    }
+
+    if (currentRoute === '/verify-email') {
+      if (!verificationEmail) {
+        // If no email set, redirect to register
+        navigateTo('/register');
+        return null;
+      }
+      return (
+        <VerifyEmail
+          email={verificationEmail}
+          onVerificationSuccess={handleVerificationSuccess}
+          onNavigateToLogin={() => navigateTo('/login')}
         />
       );
     }

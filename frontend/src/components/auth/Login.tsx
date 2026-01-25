@@ -5,6 +5,7 @@ interface LoginProps {
   onLoginSuccess: (user: any, token: string) => void;
   onNavigateToRegister: () => void;
   onNavigateToStore: () => void;
+  onNavigateToVerify?: (email: string) => void;
 }
 
 interface LoginFormData {
@@ -12,7 +13,7 @@ interface LoginFormData {
   password: string;
 }
 
-const Login: React.FC<LoginProps> = ({ onLoginSuccess, onNavigateToRegister, onNavigateToStore }) => {
+const Login: React.FC<LoginProps> = ({ onLoginSuccess, onNavigateToRegister, onNavigateToStore, onNavigateToVerify }) => {
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
     password: ''
@@ -39,15 +40,23 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onNavigateToRegister, onN
       const response = await axios.post('/auth/login', formData, {
         withCredentials: true
       });
-      
+
       if (response.data.success) {
         const { user } = response.data.data;
-        
+
         onLoginSuccess(user, 'session');
       }
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Login failed. Please try again.';
-      setError(errorMessage);
+
+      // Check if email verification is required
+      if (err.response?.data?.requiresVerification && onNavigateToVerify) {
+        // Redirect to verification page
+        const email = err.response?.data?.email || formData.email;
+        onNavigateToVerify(email);
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
