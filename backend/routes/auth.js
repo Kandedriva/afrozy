@@ -14,6 +14,13 @@ const {
   clearResetToken,
   sendPasswordResetEmail
 } = require('../utils/passwordReset');
+const {
+  generateVerificationCode,
+  storeVerificationCode,
+  verifyCode,
+  isEmailVerified
+} = require('../utils/verificationCode');
+const emailService = require('../utils/emailService');
 
 const router = express.Router();
 
@@ -82,41 +89,33 @@ router.post('/register', async (req, res) => {
 
     const user = await createUser({ ...userData, password }, 'customer');
 
-    // Regenerate session to prevent session fixation attacks
-    req.session.regenerate((err) => {
-      if (err) {
-        console.error('Session regeneration error:', err);
-        return res.status(500).json({
-          success: false,
-          message: 'Error creating session'
-        });
-      }
+    // Generate and send verification code
+    const verificationCode = generateVerificationCode();
+    const codeStored = await storeVerificationCode(email, 'customer', verificationCode);
 
-      // Create new session with user data
-      req.session.userId = user.id;
-      req.session.userType = 'customer';
-      req.session.email = user.email;
-      req.session.isNewSession = true;
-      req.session.loginTime = new Date().toISOString();
-
-      // Save session before sending response
-      req.session.save((saveErr) => {
-        if (saveErr) {
-          console.error('Session save error:', saveErr);
-          return res.status(500).json({
-            success: false,
-            message: 'Error saving session'
-          });
-        }
-
-        res.status(201).json({
-          success: true,
-          message: 'User registered successfully',
-          data: {
-            user
-          }
-        });
+    if (!codeStored) {
+      return res.status(500).json({
+        success: false,
+        message: 'Error generating verification code'
       });
+    }
+
+    // Send verification email
+    const emailSent = await emailService.sendVerificationCode(email, fullName, verificationCode);
+
+    if (!emailSent) {
+      console.warn(`⚠️  Failed to send verification email to ${email}, but user was created`);
+    }
+
+    // DO NOT log user in automatically - they must verify email first
+    res.status(201).json({
+      success: true,
+      message: 'Registration successful! Please check your email for a verification code.',
+      data: {
+        email: user.email,
+        requiresVerification: true,
+        emailSent: emailSent
+      }
     });
 
   } catch (error) {
@@ -155,6 +154,18 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({
         success: false,
         message: authResult.message
+      });
+    }
+
+    // Check if email is verified
+    const emailVerified = await isEmailVerified(email, authResult.data.user.user_type);
+
+    if (!emailVerified) {
+      return res.status(403).json({
+        success: false,
+        message: 'Please verify your email address before logging in',
+        requiresVerification: true,
+        email: email
       });
     }
 
@@ -212,13 +223,169 @@ router.post('/logout', (req, res) => {
         message: 'Error during logout'
       });
     }
-    
+
     res.clearCookie('connect.sid');
     res.json({
       success: true,
       message: 'Logout successful'
     });
   });
+});
+
+// POST /api/auth/verify-email - Verify email with code
+router.post('/verify-email', async (req, res) => {
+  try {
+    const { email, code, userType = 'customer' } = req.body;
+
+    // Validation
+    if (!email || !code) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and verification code are required'
+      });
+    }
+
+    if (!validateEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address'
+      });
+    }
+
+    if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Verification code must be 6 digits'
+      });
+    }
+
+    // Verify the code
+    const verificationResult = await verifyCode(email, userType, code);
+
+    if (!verificationResult.success) {
+      return res.status(400).json({
+        success: false,
+        message: verificationResult.message,
+        expired: verificationResult.expired || false
+      });
+    }
+
+    // Send welcome email
+    const user = await pool.query(`
+      SELECT full_name, username FROM ${userType === 'customer' ? 'customers' : 'store_owners'}
+      WHERE email = $1
+    `, [email]);
+
+    if (user.rows.length > 0) {
+      const userName = user.rows[0].full_name || user.rows[0].username;
+      await emailService.sendWelcomeEmail(email, userName);
+    }
+
+    res.json({
+      success: true,
+      message: 'Email verified successfully! You can now log in.',
+      data: {
+        userId: verificationResult.userId
+      }
+    });
+
+  } catch (error) {
+    console.error('Email verification error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during email verification'
+    });
+  }
+});
+
+// POST /api/auth/resend-verification - Resend verification code
+router.post('/resend-verification', async (req, res) => {
+  try {
+    const { email, userType = 'customer' } = req.body;
+
+    // Validation
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+
+    if (!validateEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address'
+      });
+    }
+
+    // Check if user exists and is not already verified
+    const tableMap = {
+      'customer': 'customers',
+      'store_owner': 'store_owners',
+      'admin': 'admins',
+      'driver': 'drivers'
+    };
+
+    const tableName = tableMap[userType];
+    const userResult = await pool.query(`
+      SELECT email, email_verified, full_name, username
+      FROM ${tableName}
+      WHERE email = $1
+    `, [email]);
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    if (user.email_verified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is already verified'
+      });
+    }
+
+    // Generate and send new verification code
+    const verificationCode = generateVerificationCode();
+    const codeStored = await storeVerificationCode(email, userType, verificationCode);
+
+    if (!codeStored) {
+      return res.status(500).json({
+        success: false,
+        message: 'Error generating verification code'
+      });
+    }
+
+    // Send verification email
+    const userName = user.full_name || user.username;
+    const emailSent = await emailService.sendVerificationCode(email, userName, verificationCode);
+
+    if (!emailSent) {
+      return res.status(500).json({
+        success: false,
+        message: 'Error sending verification email'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Verification code sent! Please check your email.',
+      data: {
+        email: email
+      }
+    });
+
+  } catch (error) {
+    console.error('Resend verification error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error while resending verification code'
+    });
+  }
 });
 
 // GET /api/auth/profile - Get user profile (requires authentication)
