@@ -177,17 +177,22 @@ class R2Service {
       // Generate public URL
       let publicUrl;
 
-      // Check if we have a custom domain or public R2 URL configured
-      if (this.publicUrl && this.publicUrl !== this.endpoint) {
+      // ALWAYS use the CDN URL if R2_PUBLIC_URL is configured
+      // This ensures images are served from the public CDN, not the private R2 storage endpoint
+      if (this.publicUrl) {
         // Use the public URL (CDN or R2 public domain)
         publicUrl = this.publicUrl.endsWith('/')
           ? `${this.publicUrl}${finalFileName}`
           : `${this.publicUrl}/${finalFileName}`;
 
-        logger.info(`Using direct CDN URL: ${publicUrl}`);
+        logger.info(`✅ Using CDN URL: ${publicUrl}`);
+        logger.info(`   Public URL: ${this.publicUrl}`);
+        logger.info(`   Endpoint: ${this.endpoint}`);
       } else {
-        // Fallback to API proxy if no public URL is configured
-        logger.warn('No R2_PUBLIC_URL configured, falling back to API proxy');
+        // Fallback to API proxy if no R2_PUBLIC_URL is configured
+        logger.warn('⚠️ No R2_PUBLIC_URL configured, falling back to API proxy');
+        logger.warn(`   This.publicUrl: ${this.publicUrl}`);
+        logger.warn(`   This.endpoint: ${this.endpoint}`);
 
         let apiBaseUrl;
         if (process.env.NODE_ENV === 'production') {
