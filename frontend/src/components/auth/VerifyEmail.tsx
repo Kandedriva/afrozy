@@ -20,7 +20,7 @@ const VerifyEmail: React.FC<VerifyEmailProps> = ({
   const [resendCooldown, setResendCooldown] = useState(0);
   const [timeLeft, setTimeLeft] = useState(15 * 60); // 15 minutes in seconds
 
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   // Countdown timer for code expiration
   useEffect(() => {
@@ -245,7 +245,7 @@ const VerifyEmail: React.FC<VerifyEmailProps> = ({
               {code.map((digit, index) => (
                 <input
                   key={index}
-                  ref={el => inputRefs.current[index] = el}
+                  ref={el => { inputRefs.current[index] = el; }}
                   type="text"
                   inputMode="numeric"
                   maxLength={1}
