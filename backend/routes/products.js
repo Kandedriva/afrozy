@@ -32,19 +32,28 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET product by ID
+// GET product by ID with store information
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
-    
+    const result = await pool.query(`
+      SELECT
+        p.*,
+        s.store_name,
+        s.store_description,
+        s.store_address
+      FROM products p
+      LEFT JOIN stores s ON p.store_id = s.id AND s.status = 'approved'
+      WHERE p.id = $1
+    `, [id]);
+
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Product not found'
       });
     }
-    
+
     res.json({
       success: true,
       data: result.rows[0]
@@ -58,12 +67,22 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// GET products by category
+// GET products by category with store information
 router.get('/category/:category', async (req, res) => {
   try {
     const { category } = req.params;
-    const result = await pool.query('SELECT * FROM products WHERE category = $1 ORDER BY created_at DESC', [category]);
-    
+    const result = await pool.query(`
+      SELECT
+        p.*,
+        s.store_name,
+        s.store_description,
+        s.store_address
+      FROM products p
+      LEFT JOIN stores s ON p.store_id = s.id AND s.status = 'approved'
+      WHERE p.category = $1
+      ORDER BY p.created_at DESC
+    `, [category]);
+
     res.json({
       success: true,
       data: result.rows
