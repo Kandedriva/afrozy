@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from '../../utils/axios';
 
 interface VerifyEmailProps {
@@ -106,7 +106,7 @@ const VerifyEmail: React.FC<VerifyEmailProps> = ({
   };
 
   // Verify code
-  const handleVerify = async () => {
+  const handleVerify = useCallback(async () => {
     const verificationCode = code.join('');
 
     if (verificationCode.length !== 6) {
@@ -141,7 +141,7 @@ const VerifyEmail: React.FC<VerifyEmailProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [code, email, onVerificationSuccess]);
 
   // Resend code
   const handleResend = async () => {
@@ -181,7 +181,7 @@ const VerifyEmail: React.FC<VerifyEmailProps> = ({
     if (code.every(digit => digit !== '') && !loading) {
       handleVerify();
     }
-  }, [code]);
+  }, [code, handleVerify, loading]);
 
   if (success) {
     return (
