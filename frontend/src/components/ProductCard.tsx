@@ -24,6 +24,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const { addToCart, state } = useCart();
 
   const handleImageClick = () => {
@@ -101,6 +102,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const isInCart = !!cartItem;
   const cartQuantity = cartItem?.quantity || 0;
 
+  // Check if description is long enough to need "Read More"
+  const needsReadMore = product.description && product.description.length > 100;
+
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full">
       <div className="relative overflow-hidden cursor-pointer group">
@@ -136,9 +140,19 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           <h3 className="text-xl font-bold text-gray-800 mb-2 leading-tight">
             {product.name}
           </h3>
-          <p className="text-gray-600 text-sm leading-relaxed line-clamp-3">
-            {product.description}
-          </p>
+          <div>
+            <p className={`text-gray-600 text-sm leading-relaxed ${!isDescriptionExpanded ? 'line-clamp-3' : ''}`}>
+              {product.description}
+            </p>
+            {needsReadMore && (
+              <button
+                onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                className="text-blue-600 hover:text-blue-800 text-xs font-medium mt-1 transition-colors"
+              >
+                {isDescriptionExpanded ? 'Read Less' : 'Read More'}
+              </button>
+            )}
+          </div>
         </div>
         
         <div className="mt-auto">
