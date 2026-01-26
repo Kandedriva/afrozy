@@ -308,7 +308,7 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
 
     const storeQuery = `
-      SELECT 
+      SELECT
         s.id,
         s.store_name,
         s.store_description,
@@ -324,7 +324,7 @@ router.get('/:id', async (req, res) => {
         u.phone as owner_phone
       FROM stores s
       JOIN store_owners u ON s.owner_id = u.id
-      WHERE s.id = $1 AND s.status = 'approved'
+      WHERE s.id = $1
     `;
 
     const result = await pool.query(storeQuery, [id]);
@@ -369,12 +369,12 @@ router.get('/:id/products', async (req, res) => {
     const order = req.query.order || 'DESC';
     const offset = (page - 1) * limit;
 
-    // First, verify store exists and is approved
+    // First, verify store exists
     const storeCheck = await pool.query('SELECT id, store_name, status FROM stores WHERE id = $1', [id]);
-    if (storeCheck.rows.length === 0 || storeCheck.rows[0].status !== 'approved') {
+    if (storeCheck.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Store not found or not available'
+        message: 'Store not found'
       });
     }
 
