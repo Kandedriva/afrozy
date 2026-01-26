@@ -140,22 +140,22 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         productName={product.name}
       />
       
-      <div className="p-5 flex flex-col flex-grow">
-        <div className="mb-3">
+      <div className="p-4 flex flex-col flex-grow">
+        <div className="mb-2">
           <h3
-            className="text-xl font-bold text-gray-800 mb-2 leading-tight cursor-pointer hover:text-blue-600 transition-colors"
+            className="text-xl font-bold text-gray-800 mb-2 leading-tight cursor-pointer hover:text-blue-600 transition-colors line-clamp-2"
             onClick={handleViewDetails}
           >
             {product.name}
           </h3>
-          <div>
-            <p className="text-gray-600 text-sm leading-relaxed line-clamp-3">
+          <div className="h-16">
+            <p className="text-gray-600 text-sm leading-relaxed line-clamp-2">
               {product.description}
             </p>
             {needsReadMore && (
               <button
                 onClick={handleViewDetails}
-                className="text-blue-600 hover:text-blue-800 text-xs font-medium mt-1 transition-colors"
+                className="text-blue-600 hover:text-blue-800 text-xs font-medium mt-1 transition-colors inline-block"
               >
                 Read More
               </button>
@@ -164,13 +164,13 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         </div>
         
         <div className="mt-auto">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3">
             <span className="text-3xl font-bold text-green-600">
               ${product.price}
             </span>
             <div className="flex items-center space-x-1">
               <div className={`w-2 h-2 rounded-full ${
-                product.stock_quantity > 20 ? 'bg-green-500' : 
+                product.stock_quantity > 20 ? 'bg-green-500' :
                 product.stock_quantity > 5 ? 'bg-yellow-500' : 'bg-red-500'
               }`}></div>
               <span className="text-sm text-gray-600 font-medium">
@@ -178,9 +178,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               </span>
             </div>
           </div>
-          
+
           {isInCart && (
-            <div className="mb-3 text-center">
+            <div className="mb-2 text-center">
               <span className="text-sm text-green-600 font-medium">
                 ✓ {cartQuantity} in cart
               </span>
@@ -189,7 +189,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
           {/* Store Information and Visit Store Button */}
           {product.store_id && product.store_name && (
-            <div className="mb-3">
+            <div className="mb-2">
               <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
                 <div className="flex items-center space-x-2">
                   <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -209,9 +209,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </div>
           )}
           
-          <button 
+          <button
             onClick={handleAddToCart}
-            className={`w-full py-3 px-4 rounded-lg font-medium transition-all duration-200 flex items-center justify-center space-x-2 ${
+            className={`w-full py-2.5 px-4 rounded-lg font-medium transition-all duration-200 flex items-center justify-center space-x-2 ${
               product.stock_quantity === 0
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : cartQuantity >= product.stock_quantity
