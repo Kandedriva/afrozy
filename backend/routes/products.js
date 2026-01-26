@@ -7,13 +7,13 @@ router.get('/', async (req, res) => {
   try {
     console.log('Attempting to fetch products...');
     const result = await pool.query(`
-      SELECT 
+      SELECT
         p.*,
         s.store_name,
         s.store_description,
         s.store_address
       FROM products p
-      LEFT JOIN stores s ON p.store_id = s.id AND s.status = 'approved'
+      LEFT JOIN stores s ON p.store_id = s.id
       ORDER BY p.created_at DESC
     `);
     console.log(`Found ${result.rows.length} products`);
@@ -43,7 +43,7 @@ router.get('/:id', async (req, res) => {
         s.store_description,
         s.store_address
       FROM products p
-      LEFT JOIN stores s ON p.store_id = s.id AND s.status = 'approved'
+      LEFT JOIN stores s ON p.store_id = s.id
       WHERE p.id = $1
     `, [id]);
 
@@ -78,7 +78,7 @@ router.get('/category/:category', async (req, res) => {
         s.store_description,
         s.store_address
       FROM products p
-      LEFT JOIN stores s ON p.store_id = s.id AND s.status = 'approved'
+      LEFT JOIN stores s ON p.store_id = s.id
       WHERE p.category = $1
       ORDER BY p.created_at DESC
     `, [category]);
