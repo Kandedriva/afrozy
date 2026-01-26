@@ -24,7 +24,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const { addToCart, state } = useCart();
 
   const handleImageClick = () => {
@@ -97,6 +96,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     }
   };
 
+  const handleViewDetails = () => {
+    // Navigate to product detail page
+    window.history.pushState(null, '', `/product/${product.id}`);
+    window.location.reload();
+  };
+
   // Check if product is already in cart
   const cartItem = state.items.find(item => item.id === product.id);
   const isInCart = !!cartItem;
@@ -137,19 +142,22 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       
       <div className="p-5 flex flex-col flex-grow">
         <div className="mb-3">
-          <h3 className="text-xl font-bold text-gray-800 mb-2 leading-tight">
+          <h3
+            className="text-xl font-bold text-gray-800 mb-2 leading-tight cursor-pointer hover:text-blue-600 transition-colors"
+            onClick={handleViewDetails}
+          >
             {product.name}
           </h3>
           <div>
-            <p className={`text-gray-600 text-sm leading-relaxed ${!isDescriptionExpanded ? 'line-clamp-3' : ''}`}>
+            <p className="text-gray-600 text-sm leading-relaxed line-clamp-3">
               {product.description}
             </p>
             {needsReadMore && (
               <button
-                onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                onClick={handleViewDetails}
                 className="text-blue-600 hover:text-blue-800 text-xs font-medium mt-1 transition-colors"
               >
-                {isDescriptionExpanded ? 'Read Less' : 'Read More'}
+                Read More
               </button>
             )}
           </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Products from './pages/Products';
+import ProductDetail from './pages/ProductDetail';
 import AdminPage from './pages/AdminPage';
 import UserAccount from './pages/UserAccount';
 import DriverDashboard from './pages/DriverDashboard';
@@ -394,6 +395,14 @@ function AppContent() {
     // All stores listing page
     if (currentRoute === '/stores') {
       return <AllStores user={user} onLogout={user ? handleLogout : undefined} />;
+    }
+
+    // Product detail page (numeric ID)
+    if (currentRoute.startsWith('/product/')) {
+      const productId = currentRoute.split('/product/')[1];
+      if (productId && /^\d+$/.test(productId)) {
+        return <ProductDetail productId={productId} user={user} onLogout={user ? handleLogout : undefined} />;
+      }
     }
 
     // Handle any other routes - redirect to home
