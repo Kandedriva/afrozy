@@ -774,6 +774,156 @@ Continue shopping: ${process.env.FRONTEND_URL || 'https://afrozy.com'}
 This is an automated message, please do not reply to this email.
     `;
   }
+
+  /**
+   * Send refund confirmation email
+   * @param {string} email - Customer email address
+   * @param {string} name - Customer name
+   * @param {object} refundDetails - Refund information
+   * @returns {Promise<boolean>} Success status
+   */
+  async sendRefundConfirmation(email, name, refundDetails) {
+    if (!this.isConfigured) {
+      console.log(`📧 [DEV MODE] Refund confirmation email would be sent to ${email}`);
+      console.log('Refund Details:', JSON.stringify(refundDetails, null, 2));
+      return true;
+    }
+
+    try {
+      const mailOptions = {
+        from: `"${process.env.SMTP_FROM_NAME || 'Afrozy Marketplace'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
+        to: email,
+        subject: `Refund Processed for Order #${refundDetails.orderId} - Afrozy Marketplace`,
+        html: this.getRefundConfirmationTemplate(name, refundDetails),
+        text: this.getRefundConfirmationText(name, refundDetails)
+      };
+
+      const info = await this.transporter.sendMail(mailOptions);
+      console.log(`✅ Refund confirmation email sent to ${email}: ${info.messageId}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Failed to send refund confirmation email to ${email}:`, error.message);
+      return false;
+    }
+  }
+
+  /**
+   * HTML template for refund confirmation email
+   */
+  getRefundConfirmationTemplate(name, refundDetails) {
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Refund Processed</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px 20px; text-align: center;">
+                            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">💰 Refund Processed</h1>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px 30px;">
+                            <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 24px;">Your refund has been processed, ${name}!</h2>
+                            <p style="color: #666666; font-size: 16px; line-height: 1.5; margin: 0 0 20px 0;">
+                                We've successfully processed your ${refundDetails.refundType} refund request. The refund should appear in your account within 5-10 business days.
+                            </p>
+
+                            <!-- Refund Details -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin: 20px 0; background-color: #f8f9fa; border-radius: 8px; padding: 20px;">
+                                <tr>
+                                    <td>
+                                        <p style="margin: 0; color: #666666; font-size: 14px;">Refund Amount</p>
+                                        <p style="margin: 5px 0 15px 0; color: #10b981; font-size: 32px; font-weight: bold;">$${refundDetails.refundAmount.toFixed(2)}</p>
+                                        <p style="margin: 0; color: #666666; font-size: 14px;">Order Number</p>
+                                        <p style="margin: 5px 0 15px 0; color: #333333; font-size: 18px; font-weight: bold;">#${refundDetails.orderId}</p>
+                                        <p style="margin: 0; color: #666666; font-size: 14px;">Refund ID</p>
+                                        <p style="margin: 5px 0 0 0; color: #333333; font-size: 16px;">#${refundDetails.refundId}</p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Refund Info -->
+                            <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 4px; margin: 20px 0;">
+                                <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
+                                    <strong>Please Note:</strong> Refunds typically take 5-10 business days to appear on your original payment method. The exact timing depends on your bank or card issuer.
+                                </p>
+                            </div>
+
+                            <p style="color: #666666; font-size: 16px; line-height: 1.5; margin: 20px 0;">
+                                If you have any questions about this refund, please contact our support team.
+                            </p>
+
+                            <!-- CTA Button -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
+                                <tr>
+                                    <td align="center">
+                                        <a href="${process.env.FRONTEND_URL || 'https://afrozy.com'}/account"
+                                           style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; padding: 15px 40px; border-radius: 5px; font-weight: bold; font-size: 16px;">
+                                            View Order History
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e0e0e0;">
+                            <p style="color: #999999; font-size: 12px; margin: 0 0 10px 0;">
+                                © ${new Date().getFullYear()} Afrozy Marketplace. All rights reserved.
+                            </p>
+                            <p style="color: #999999; font-size: 12px; margin: 0;">
+                                This is an automated message, please do not reply to this email.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+    `;
+  }
+
+  /**
+   * Plain text version of refund confirmation email
+   */
+  getRefundConfirmationText(name, refundDetails) {
+    return `
+Refund Processed - Afrozy Marketplace
+
+Your refund has been processed, ${name}!
+
+We've successfully processed your ${refundDetails.refundType} refund request. The refund should appear in your account within 5-10 business days.
+
+Refund Amount: $${refundDetails.refundAmount.toFixed(2)}
+Order Number: #${refundDetails.orderId}
+Refund ID: #${refundDetails.refundId}
+
+PLEASE NOTE:
+Refunds typically take 5-10 business days to appear on your original payment method. The exact timing depends on your bank or card issuer.
+
+If you have any questions about this refund, please contact our support team.
+
+View your order history: ${process.env.FRONTEND_URL || 'https://afrozy.com'}/account
+
+© ${new Date().getFullYear()} Afrozy Marketplace. All rights reserved.
+This is an automated message, please do not reply to this email.
+    `;
+  }
 }
 
 // Create singleton instance

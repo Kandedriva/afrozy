@@ -218,6 +218,10 @@ app.use('/api/checkout', checkoutRoutes);
 const stripeConnectRoutes = require('./routes/stripe-connect');
 app.use('/api/stripe-connect', stripeConnectRoutes);
 
+// Refund routes
+const refundRoutes = require('./routes/refunds');
+app.use('/api/refunds', refundRoutes);
+
 // Global error handler
 app.use((err, req, res, next) => {
   logger.error('Unhandled error:', {
