@@ -2,6 +2,7 @@ const express = require('express');
 const { pool } = require('../config/database');
 const { authenticateSession, authenticateAdmin } = require('./auth');
 const { createNotification } = require('./notifications');
+const emailService = require('../utils/emailService');
 
 const router = express.Router();
 
@@ -206,6 +207,60 @@ router.put('/admin/:id/status', authenticateAdmin, async (req, res) => {
         'order',
         `/account/orders/${id}`
       );
+    }
+
+    // Send email notifications for shipped and delivered status
+    if (previousStatus !== status && (status === 'shipped' || status === 'delivered')) {
+      try {
+        // Get full order details for email
+        const orderDetailsQuery = `
+          SELECT
+            o.id, o.total_amount, o.created_at,
+            o.delivery_name, o.delivery_email, o.delivery_phone,
+            o.delivery_address, o.delivery_city, o.delivery_state,
+            o.delivery_zip, o.delivery_country
+          FROM orders o
+          WHERE o.id = $1
+        `;
+        const orderDetailsResult = await pool.query(orderDetailsQuery, [id]);
+
+        if (orderDetailsResult.rows.length > 0) {
+          const orderDetails = orderDetailsResult.rows[0];
+
+          const emailOrderDetails = {
+            orderId: orderDetails.id,
+            orderDate: orderDetails.created_at,
+            totalAmount: parseFloat(orderDetails.total_amount),
+            deliveryName: orderDetails.delivery_name,
+            deliveryEmail: orderDetails.delivery_email,
+            deliveryPhone: orderDetails.delivery_phone,
+            deliveryAddress: orderDetails.delivery_address,
+            deliveryCity: orderDetails.delivery_city,
+            deliveryState: orderDetails.delivery_state,
+            deliveryZip: orderDetails.delivery_zip,
+            deliveryCountry: orderDetails.delivery_country
+          };
+
+          if (status === 'shipped') {
+            await emailService.sendOrderShipped(
+              orderDetails.delivery_email,
+              orderDetails.delivery_name,
+              emailOrderDetails
+            );
+            console.log(`✅ Order shipped email sent for order #${id}`);
+          } else if (status === 'delivered') {
+            await emailService.sendOrderDelivered(
+              orderDetails.delivery_email,
+              orderDetails.delivery_name,
+              emailOrderDetails
+            );
+            console.log(`✅ Order delivered email sent for order #${id}`);
+          }
+        }
+      } catch (emailError) {
+        // Don't fail the request if email fails
+        console.error(`Failed to send order ${status} email:`, emailError.message);
+      }
     }
 
     res.json({

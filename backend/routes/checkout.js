@@ -3,6 +3,7 @@ const router = express.Router();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { pool } = require('../config/database');
 const { authenticateSession } = require('./auth');
+const emailService = require('../utils/emailService');
 
 // Middleware to extract user ID or session ID
 const extractUserOrSession = (req, res, next) => {
@@ -530,6 +531,48 @@ router.post('/confirm', extractUserOrSession, async (req, res) => {
         }
 
         await client.query('COMMIT');
+
+        // Send order confirmation email
+        try {
+          // Get order items with product names
+          const orderItemsQuery = `
+            SELECT oi.product_id, oi.quantity, oi.price, p.name
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = $1
+          `;
+          const orderItemsResult = await client.query(orderItemsQuery, [order.id]);
+
+          const emailOrderDetails = {
+            orderId: order.id,
+            orderDate: order.created_at,
+            totalAmount: parseFloat(order.total_amount),
+            items: orderItemsResult.rows.map(item => ({
+              name: item.name,
+              quantity: item.quantity,
+              price: parseFloat(item.price)
+            })),
+            deliveryName: order.delivery_name,
+            deliveryEmail: order.delivery_email,
+            deliveryPhone: order.delivery_phone,
+            deliveryAddress: order.delivery_address,
+            deliveryCity: order.delivery_city,
+            deliveryState: order.delivery_state,
+            deliveryZip: order.delivery_zip,
+            deliveryCountry: order.delivery_country
+          };
+
+          await emailService.sendOrderConfirmation(
+            order.delivery_email,
+            order.delivery_name,
+            emailOrderDetails
+          );
+
+          console.log(`✅ Order confirmation email sent for order #${order.id}`);
+        } catch (emailError) {
+          // Don't fail the request if email fails
+          console.error('Failed to send order confirmation email:', emailError.message);
+        }
 
         res.json({
           success: true,
