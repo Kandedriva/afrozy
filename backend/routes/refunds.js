@@ -6,6 +6,52 @@ const { authenticateSession, authenticateAdmin } = require('./auth');
 const { createNotification } = require('./notifications');
 const emailService = require('../utils/emailService');
 
+// Session-based authentication middleware for store owners
+function authenticateStoreOwner(req, res, next) {
+  // Check session authentication
+  if (!req.session || !req.session.userId || !req.session.userType) {
+    return res.status(401).json({
+      success: false,
+      message: 'Store owner authentication required. Please log in.'
+    });
+  }
+
+  // Verify user is a store owner
+  if (req.session.userType !== 'store_owner') {
+    return res.status(403).json({
+      success: false,
+      message: 'Store owner access required'
+    });
+  }
+
+  // Set up user object from session
+  req.user = {
+    userId: req.session.userId,
+    userType: req.session.userType,
+    email: req.session.email
+  };
+
+  // Get store ID for this store owner
+  pool.query('SELECT id FROM stores WHERE owner_id = $1', [req.user.userId])
+    .then(result => {
+      if (result.rows.length === 0) {
+        return res.status(403).json({
+          success: false,
+          message: 'No store found for this user'
+        });
+      }
+      req.user.storeId = result.rows[0].id;
+      next();
+    })
+    .catch(error => {
+      console.error('Error verifying store owner:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Authentication error'
+      });
+    });
+}
+
 /**
  * POST - Request a refund (Customer or Admin)
  * Initiates a refund request for an order
@@ -26,12 +72,17 @@ router.post('/request', authenticateSession, async (req, res) => {
 
     await client.query('BEGIN');
 
-    // Get order details
+    // Get order details with store information
     const orderQuery = `
-      SELECT o.*, c.full_name, c.email
+      SELECT o.*, c.full_name, c.email,
+             oi.product_id, p.store_id, s.owner_id as store_owner_id
       FROM orders o
       LEFT JOIN customers c ON o.user_id = c.id
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN products p ON oi.product_id = p.id
+      LEFT JOIN stores s ON p.store_id = s.id
       WHERE o.id = $1 AND (o.user_id = $2 OR $2 IS NULL)
+      LIMIT 1
     `;
     const orderResult = await client.query(orderQuery, [orderId, userId]);
 
@@ -90,8 +141,8 @@ router.post('/request', authenticateSession, async (req, res) => {
     const refundQuery = `
       INSERT INTO refunds (
         order_id, user_id, refund_amount, refund_reason, refund_type,
-        status, stripe_payment_intent_id, requested_by, requested_by_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        status, stripe_payment_intent_id, requested_by, requested_by_id, store_owner_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `;
 
@@ -104,7 +155,8 @@ router.post('/request', authenticateSession, async (req, res) => {
       'pending',
       order.payment_intent_id,
       'customer',
-      userId
+      userId,
+      order.store_owner_id || null
     ]);
 
     const refund = refundResult.rows[0];
@@ -127,15 +179,30 @@ router.post('/request', authenticateSession, async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Create notification for admin
-    await createNotification(
-      null, // Will be sent to all admins
-      'admin',
-      `New Refund Request #${refund.id}`,
-      `Customer requested ${refundType} refund for order #${orderId}: $${refundAmount}`,
-      'refund',
-      `/admin/refunds/${refund.id}`
-    );
+    // Create notification for admin or store owner
+    const storeOwnerId = order.store_owner_id;
+
+    if (storeOwnerId) {
+      // Notify store owner for store products
+      await createNotification(
+        storeOwnerId,
+        'store_owner',
+        `New Refund Request #${refund.id}`,
+        `Customer requested ${refundType} refund for order #${orderId}: $${refundAmount}`,
+        'refund',
+        `/store/refunds/${refund.id}`
+      );
+    } else {
+      // Notify admin for platform products
+      await createNotification(
+        null, // Will be sent to all admins
+        'admin',
+        `New Refund Request #${refund.id}`,
+        `Customer requested ${refundType} refund for order #${orderId}: $${refundAmount}`,
+        'refund',
+        `/admin/refunds/${refund.id}`
+      );
+    }
 
     res.json({
       success: true,
@@ -161,6 +228,282 @@ router.post('/request', authenticateSession, async (req, res) => {
 });
 
 /**
+ * GET - Get all refunds for store owner (Store Owner only)
+ * Lists all refund requests for the store owner's products
+ */
+router.get('/store-owner/all', authenticateStoreOwner, async (req, res) => {
+  try {
+    const { status, page = 1, limit = 50 } = req.query;
+    const offset = (page - 1) * limit;
+    const storeOwnerId = req.user.userId;
+
+    let query = `
+      SELECT
+        r.*,
+        o.payment_intent_id,
+        o.total_amount as order_total,
+        c.full_name as customer_name,
+        c.email as customer_email
+      FROM refunds r
+      LEFT JOIN orders o ON r.order_id = o.id
+      LEFT JOIN customers c ON r.user_id = c.id
+      WHERE r.store_owner_id = $1
+    `;
+
+    const params = [storeOwnerId];
+    if (status) {
+      query += ` AND r.status = $2`;
+      params.push(status);
+    }
+
+    query += ` ORDER BY r.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(limit, offset);
+
+    const result = await pool.query(query, params);
+
+    // Get total count
+    const countQuery = status
+      ? `SELECT COUNT(*) FROM refunds WHERE store_owner_id = $1 AND status = $2`
+      : `SELECT COUNT(*) FROM refunds WHERE store_owner_id = $1`;
+    const countResult = await pool.query(countQuery, status ? [storeOwnerId, status] : [storeOwnerId]);
+
+    res.json({
+      success: true,
+      data: result.rows,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: parseInt(countResult.rows[0].count),
+        pages: Math.ceil(countResult.rows[0].count / limit)
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching store owner refunds:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch refunds'
+    });
+  }
+});
+
+/**
+ * POST - Process refund (Store Owner)
+ * Processes a pending refund request for store products via Stripe
+ */
+router.post('/store-owner/:id/process', authenticateStoreOwner, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { id } = req.params;
+    const { adminNotes } = req.body;
+    const storeOwnerId = req.user.userId;
+
+    await client.query('BEGIN');
+
+    // Get refund details and verify it belongs to this store owner
+    const refundQuery = `
+      SELECT r.*, o.payment_intent_id, o.total_amount, c.email, c.full_name
+      FROM refunds r
+      JOIN orders o ON r.order_id = o.id
+      LEFT JOIN customers c ON r.user_id = c.id
+      WHERE r.id = $1 AND r.store_owner_id = $2
+    `;
+    const refundResult = await client.query(refundQuery, [id, storeOwnerId]);
+
+    if (refundResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        message: 'Refund not found or unauthorized'
+      });
+    }
+
+    const refund = refundResult.rows[0];
+
+    if (refund.status !== 'pending') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: `Refund is already ${refund.status}`
+      });
+    }
+
+    // Update refund status to processing
+    await client.query(`
+      UPDATE refunds
+      SET status = 'processing', processed_by_id = $1, admin_notes = $2, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+    `, [storeOwnerId, adminNotes, id]);
+
+    try {
+      // Process refund via Stripe
+      const stripeRefund = await stripe.refunds.create({
+        payment_intent: refund.payment_intent_id,
+        amount: Math.round(parseFloat(refund.refund_amount) * 100), // Convert to cents
+        reason: 'requested_by_customer',
+        metadata: {
+          refund_id: id.toString(),
+          order_id: refund.order_id.toString(),
+          refund_type: refund.refund_type,
+          processed_by: 'store_owner'
+        }
+      });
+
+      // Update refund with Stripe refund ID and mark as completed
+      await client.query(`
+        UPDATE refunds
+        SET
+          status = 'completed',
+          stripe_refund_id = $1,
+          processed_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+      `, [stripeRefund.id, id]);
+
+      // Update order refund status
+      await client.query(`
+        UPDATE orders
+        SET refund_status = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+      `, [refund.refund_type === 'full' ? 'completed' : 'partial', refund.order_id]);
+
+      await client.query('COMMIT');
+
+      // Send refund confirmation email
+      if (refund.email) {
+        try {
+          await emailService.sendRefundConfirmation(
+            refund.email,
+            refund.full_name || 'Customer',
+            {
+              refundId: id,
+              orderId: refund.order_id,
+              refundAmount: parseFloat(refund.refund_amount),
+              refundType: refund.refund_type,
+              stripeRefundId: stripeRefund.id
+            }
+          );
+          console.log(`✅ Refund confirmation email sent for refund #${id}`);
+        } catch (emailError) {
+          console.error('Failed to send refund email:', emailError.message);
+        }
+      }
+
+      // Create notification for customer
+      if (refund.user_id) {
+        await createNotification(
+          refund.user_id,
+          'customer',
+          `Refund Processed`,
+          `Your refund of $${refund.refund_amount} for order #${refund.order_id} has been processed.`,
+          'refund',
+          `/account/orders/${refund.order_id}`
+        );
+      }
+
+      res.json({
+        success: true,
+        message: 'Refund processed successfully',
+        data: {
+          refundId: id,
+          stripeRefundId: stripeRefund.id,
+          amount: parseFloat(refund.refund_amount),
+          status: 'completed'
+        }
+      });
+
+    } catch (stripeError) {
+      // Stripe refund failed
+      await client.query(`
+        UPDATE refunds
+        SET status = 'failed', admin_notes = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+      `, [`Stripe error: ${stripeError.message}`, id]);
+
+      await client.query('COMMIT');
+
+      throw new Error(`Stripe refund failed: ${stripeError.message}`);
+    }
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error processing refund:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process refund',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * POST - Cancel refund request (Store Owner)
+ * Cancels a pending refund request for store products
+ */
+router.post('/store-owner/:id/cancel', authenticateStoreOwner, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cancelReason } = req.body;
+    const storeOwnerId = req.user.userId;
+
+    const result = await pool.query(`
+      UPDATE refunds
+      SET
+        status = 'cancelled',
+        admin_notes = $1,
+        processed_by_id = $2,
+        processed_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3 AND status = 'pending' AND store_owner_id = $2
+      RETURNING *
+    `, [cancelReason, storeOwnerId, id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Refund not found, unauthorized, or cannot be cancelled'
+      });
+    }
+
+    const refund = result.rows[0];
+
+    // Update order refund status back to none
+    await pool.query(`
+      UPDATE orders SET refund_status = 'none', updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+    `, [refund.order_id]);
+
+    // Notify customer if they have user_id
+    if (refund.user_id) {
+      await createNotification(
+        refund.user_id,
+        'customer',
+        `Refund Request Cancelled`,
+        `Your refund request for order #${refund.order_id} has been cancelled.`,
+        'refund',
+        `/account/orders/${refund.order_id}`
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'Refund cancelled successfully',
+      data: { refundId: id }
+    });
+
+  } catch (error) {
+    console.error('Error cancelling refund:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to cancel refund'
+    });
+  }
+});
+
+/**
  * POST - Process refund (Admin only)
  * Processes a pending refund request via Stripe
  */
@@ -174,13 +517,13 @@ router.post('/:id/process', authenticateAdmin, async (req, res) => {
 
     await client.query('BEGIN');
 
-    // Get refund details
+    // Get refund details (only platform refunds, not store refunds)
     const refundQuery = `
       SELECT r.*, o.payment_intent_id, o.total_amount, c.email, c.full_name
       FROM refunds r
       JOIN orders o ON r.order_id = o.id
       LEFT JOIN customers c ON r.user_id = c.id
-      WHERE r.id = $1
+      WHERE r.id = $1 AND r.store_owner_id IS NULL
     `;
     const refundResult = await client.query(refundQuery, [id]);
 
@@ -188,7 +531,7 @@ router.post('/:id/process', authenticateAdmin, async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(404).json({
         success: false,
-        message: 'Refund not found'
+        message: 'Refund not found or belongs to a store owner'
       });
     }
 
@@ -329,14 +672,14 @@ router.post('/:id/cancel', authenticateAdmin, async (req, res) => {
         processed_by_id = $2,
         processed_at = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $3 AND status = 'pending'
+      WHERE id = $3 AND status = 'pending' AND store_owner_id IS NULL
       RETURNING *
     `, [cancelReason, adminId, id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Refund not found or cannot be cancelled'
+        message: 'Refund not found, belongs to store owner, or cannot be cancelled'
       });
     }
 
@@ -394,11 +737,12 @@ router.get('/admin/all', authenticateAdmin, async (req, res) => {
       FROM refunds r
       LEFT JOIN orders o ON r.order_id = o.id
       LEFT JOIN customers c ON r.user_id = c.id
+      WHERE r.store_owner_id IS NULL
     `;
 
     const params = [];
     if (status) {
-      query += ` WHERE r.status = $1`;
+      query += ` AND r.status = $1`;
       params.push(status);
     }
 
@@ -407,10 +751,10 @@ router.get('/admin/all', authenticateAdmin, async (req, res) => {
 
     const result = await pool.query(query, params);
 
-    // Get total count
+    // Get total count (only platform refunds, not store refunds)
     const countQuery = status
-      ? `SELECT COUNT(*) FROM refunds WHERE status = $1`
-      : `SELECT COUNT(*) FROM refunds`;
+      ? `SELECT COUNT(*) FROM refunds WHERE store_owner_id IS NULL AND status = $1`
+      : `SELECT COUNT(*) FROM refunds WHERE store_owner_id IS NULL`;
     const countResult = await pool.query(countQuery, status ? [status] : []);
 
     res.json({
