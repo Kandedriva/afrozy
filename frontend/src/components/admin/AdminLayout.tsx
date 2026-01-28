@@ -15,6 +15,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onLogo
     { name: 'Stores', href: '/admin/stores', icon: 'stores', current: currentPage === 'stores' },
     { name: 'Orders', href: '/admin/orders', icon: 'orders', current: currentPage === 'orders' },
     { name: 'Users', href: '/admin/users', icon: 'users', current: currentPage === 'users' },
+    { name: 'Refunds', href: '/admin/refunds', icon: 'refunds', current: currentPage === 'refunds' },
     { name: 'Analytics', href: '/admin/analytics', icon: 'analytics', current: currentPage === 'analytics' },
     { name: 'Settings', href: '/admin/settings', icon: 'settings', current: currentPage === 'settings' },
   ];
@@ -45,6 +46,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage, onLogo
       users: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+        </svg>
+      ),
+      refunds: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
         </svg>
       ),
       analytics: (

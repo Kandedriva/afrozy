@@ -7,6 +7,7 @@ import UserManagement from '../components/admin/UserManagement';
 import OrderManagement from '../components/admin/OrderManagement';
 import Analytics from '../components/admin/Analytics';
 import Settings from '../components/admin/Settings';
+import RefundManagement from '../components/admin/RefundManagement';
 
 interface AdminPageProps {
   onLogout?: () => void;
@@ -53,6 +54,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ onLogout }) => {
         return <OrderManagement />;
       case 'users':
         return <UserManagement />;
+      case 'refunds':
+        return <RefundManagement />;
       case 'analytics':
         return <Analytics />;
       case 'settings':
