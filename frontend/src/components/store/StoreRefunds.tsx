@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from '../../utils/axios';
 
 interface Refund {
@@ -28,11 +28,7 @@ const StoreRefunds: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchRefunds();
-  }, [statusFilter]);
-
-  const fetchRefunds = async () => {
+  const fetchRefunds = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -44,7 +40,11 @@ const StoreRefunds: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter]);
+
+  useEffect(() => {
+    fetchRefunds();
+  }, [fetchRefunds]);
 
   const openRefundModal = (refund: Refund) => {
     setSelectedRefund(refund);
