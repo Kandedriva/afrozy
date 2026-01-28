@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from '../utils/axios';
 import ImageUpload from '../components/ImageUpload';
 import StripeConnect from '../components/store/StripeConnect';
+import StoreRefunds from '../components/store/StoreRefunds';
 
 
 interface Store {
@@ -52,7 +53,7 @@ interface StoreDashboardProps {
 }
 
 const StoreDashboard: React.FC<StoreDashboardProps> = ({ storeOwner, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'sales' | 'analytics' | 'payments' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'sales' | 'refunds' | 'analytics' | 'payments' | 'settings'>('overview');
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(false);
@@ -729,6 +730,7 @@ const StoreDashboard: React.FC<StoreDashboardProps> = ({ storeOwner, onLogout })
               { key: 'overview', label: 'Overview' },
               { key: 'products', label: 'Products' },
               { key: 'sales', label: 'Sales' },
+              { key: 'refunds', label: 'Refunds' },
               { key: 'analytics', label: 'Analytics' },
               { key: 'payments', label: 'Payments' },
               { key: 'settings', label: 'Settings' }
@@ -760,6 +762,7 @@ const StoreDashboard: React.FC<StoreDashboardProps> = ({ storeOwner, onLogout })
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'products' && renderProducts()}
         {activeTab === 'sales' && renderSales()}
+        {activeTab === 'refunds' && <StoreRefunds />}
         {activeTab === 'analytics' && (
           <div className="text-center py-12">
             <p className="text-gray-500">Analytics dashboard coming soon...</p>
