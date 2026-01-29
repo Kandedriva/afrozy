@@ -33,7 +33,7 @@ const StoreRefunds: React.FC = () => {
     setError(null);
     try {
       const params = statusFilter !== 'all' ? { status: statusFilter } : {};
-      const response = await axios.get('/api/refunds/store-owner/all', { params });
+      const response = await axios.get('/refunds/store-owner/all', { params });
       setRefunds(response.data.data);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch refunds');
@@ -69,7 +69,7 @@ const StoreRefunds: React.FC = () => {
     setProcessingRefund(true);
     setError(null);
     try {
-      await axios.post(`/api/refunds/store-owner/${selectedRefund.id}/process`, {
+      await axios.post(`/refunds/store-owner/${selectedRefund.id}/process`, {
         adminNotes: adminNotes.trim()
       });
       setSuccessMessage(`Refund #${selectedRefund.id} processed successfully! Customer will be refunded $${selectedRefund.refund_amount}`);
@@ -92,7 +92,7 @@ const StoreRefunds: React.FC = () => {
     setProcessingRefund(true);
     setError(null);
     try {
-      await axios.post(`/api/refunds/store-owner/${selectedRefund.id}/cancel`, {
+      await axios.post(`/refunds/store-owner/${selectedRefund.id}/cancel`, {
         cancelReason: cancelReason.trim()
       });
       setSuccessMessage(`Refund #${selectedRefund.id} cancelled successfully`);
