@@ -53,6 +53,55 @@ function authenticateStoreOwner(req, res, next) {
     });
 }
 
+// GET /api/store/info - Get current store owner's store information
+router.get('/info', authenticateStoreOwner, async (req, res) => {
+  try {
+    const storeQuery = `
+      SELECT
+        id,
+        store_name,
+        store_description,
+        store_address,
+        business_type,
+        business_license,
+        categories,
+        status,
+        created_at,
+        updated_at
+      FROM stores
+      WHERE owner_id = $1
+    `;
+
+    const result = await pool.query(storeQuery, [req.user.userId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Store not found'
+      });
+    }
+
+    const store = result.rows[0];
+
+    // Parse categories if it's a string
+    if (store.categories && typeof store.categories === 'string') {
+      store.categories = JSON.parse(store.categories);
+    }
+
+    res.json({
+      success: true,
+      data: store
+    });
+
+  } catch (error) {
+    console.error('Error fetching store info:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch store information'
+    });
+  }
+});
+
 // GET /api/store/all - Get all stores for public listing
 router.get('/all', async (req, res) => {
   try {

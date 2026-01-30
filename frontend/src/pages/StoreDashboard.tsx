@@ -52,7 +52,8 @@ interface StoreDashboardProps {
   onLogout: () => void;
 }
 
-const StoreDashboard: React.FC<StoreDashboardProps> = ({ storeOwner, onLogout }) => {
+const StoreDashboard: React.FC<StoreDashboardProps> = ({ storeOwner: initialStoreOwner, onLogout }) => {
+  const [storeOwner, setStoreOwner] = useState<StoreOwner>(initialStoreOwner);
   const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'sales' | 'refunds' | 'analytics' | 'payments' | 'settings'>('overview');
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -88,6 +89,36 @@ const StoreDashboard: React.FC<StoreDashboardProps> = ({ storeOwner, onLogout })
     'Food & Beverages',
     'Art & Crafts'
   ];
+
+  // Fetch updated store data to check for status changes
+  const fetchStoreData = async () => {
+    try {
+      const response = await axios.get('/store/info');
+      if (response.data.success && response.data.data) {
+        const updatedStoreOwner = {
+          ...storeOwner,
+          store: response.data.data
+        };
+        setStoreOwner(updatedStoreOwner);
+        // Update localStorage to persist the change
+        localStorage.setItem('afrozy-market-user', JSON.stringify(updatedStoreOwner));
+      }
+    } catch (err: any) {
+      console.error('Error fetching store data:', err);
+    }
+  };
+
+  useEffect(() => {
+    // Fetch store data on mount
+    fetchStoreData();
+
+    // Poll for updates every 30 seconds
+    const interval = setInterval(() => {
+      fetchStoreData();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'products') {
