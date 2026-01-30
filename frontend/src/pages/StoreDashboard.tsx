@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from '../utils/axios';
 import ImageUpload from '../components/ImageUpload';
 import StripeConnect from '../components/store/StripeConnect';
@@ -91,7 +91,7 @@ const StoreDashboard: React.FC<StoreDashboardProps> = ({ storeOwner: initialStor
   ];
 
   // Fetch updated store data to check for status changes
-  const fetchStoreData = async () => {
+  const fetchStoreData = useCallback(async () => {
     try {
       const response = await axios.get('/store/info');
       if (response.data.success && response.data.data) {
@@ -106,7 +106,7 @@ const StoreDashboard: React.FC<StoreDashboardProps> = ({ storeOwner: initialStor
     } catch (err: any) {
       console.error('Error fetching store data:', err);
     }
-  };
+  }, [storeOwner]);
 
   useEffect(() => {
     // Fetch store data on mount
@@ -118,7 +118,7 @@ const StoreDashboard: React.FC<StoreDashboardProps> = ({ storeOwner: initialStor
     }, 30000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchStoreData]);
 
   useEffect(() => {
     if (activeTab === 'products') {
