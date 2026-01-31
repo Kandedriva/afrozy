@@ -11,17 +11,19 @@ Email verification codes were not being sent to users after registration because
 
 ## Solution Applied
 
-Updated `.env.production` with the correct Gmail SMTP credentials:
+Updated `.env.production` with SendGrid SMTP credentials:
 
 ```env
-SMTP_HOST=smtp.gmail.com
+SMTP_HOST=smtp.sendgrid.net
 SMTP_PORT=587
 SMTP_SECURE=false
-SMTP_USER=drivanokande4985@gmail.com
-SMTP_PASS=eeitioziuwnyxwha
+SMTP_USER=apikey
+SMTP_PASS=YOUR_SENDGRID_API_KEY_HERE
 SMTP_FROM_NAME=Afrozy Marketplace
-SMTP_FROM_EMAIL=drivanokande4985@gmail.com
+SMTP_FROM_EMAIL=drivanokande4985@gmail.com  # Or noreply@afrozy.com after domain verification
 ```
+
+**Note**: Using SendGrid for production email delivery (better deliverability than Gmail)
 
 ## Testing Performed
 
@@ -42,16 +44,20 @@ You need to **manually update environment variables** in your deployment platfor
 2. **Navigate to Environment Variables section**
 3. **Add/Update the following variables**:
    ```
-   SMTP_HOST=smtp.gmail.com
+   SMTP_HOST=smtp.sendgrid.net
    SMTP_PORT=587
    SMTP_SECURE=false
-   SMTP_USER=drivanokande4985@gmail.com
-   SMTP_PASS=eeitioziuwnyxwha
+   SMTP_USER=apikey
+   SMTP_PASS=[Your SendGrid API Key - starts with SG.]
    SMTP_FROM_NAME=Afrozy Marketplace
    SMTP_FROM_EMAIL=drivanokande4985@gmail.com
    ```
-4. **Redeploy the backend** or restart the service
-5. **Test registration** with a real email address
+4. **IMPORTANT**: Get your SendGrid API key from Settings → API Keys in SendGrid Dashboard
+5. **Verify your sender email** in SendGrid (Settings → Sender Authentication → Single Sender Verification)
+6. **Redeploy the backend** or restart the service
+7. **Test registration** with a real email address
+
+**See [SENDGRID_SETUP_GUIDE.md](SENDGRID_SETUP_GUIDE.md) for detailed SendGrid configuration steps.**
 
 ### If Backend Uses .env.production File:
 
