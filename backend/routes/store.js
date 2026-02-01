@@ -7,6 +7,9 @@ const { validateStoreRegistration, validateUserLogin, sanitizeInput } = require(
 
 const router = express.Router();
 
+// Note: Store registration now uses session-based auth instead of JWT
+// JWT variables kept for backwards compatibility but not actively used
+
 // Session-based authentication middleware for store owners
 function authenticateStoreOwner(req, res, next) {
   // Check session authentication
@@ -613,35 +616,52 @@ router.post('/register', strictAuthLimiter, sanitizeInput, validateStoreRegistra
       // Commit transaction
       await pool.query('COMMIT');
 
-      // Generate JWT token
-      const token = jwt.sign(
-        { 
-          userId: user.id, 
-          email: user.email, 
-          userType: user.user_type 
-        },
-        JWT_SECRET,
-        { expiresIn: JWT_EXPIRES_IN }
-      );
-
-      // Combine user and store data
-      const responseData = {
-        ...user,
-        store: {
-          ...store,
-          categories: typeof store.categories === 'string' 
-            ? JSON.parse(store.categories) 
-            : store.categories
+      // Create session for the new store owner
+      req.session.regenerate((err) => {
+        if (err) {
+          console.error('Session regeneration error:', err);
+          return res.status(500).json({
+            success: false,
+            message: 'Error creating session'
+          });
         }
-      };
 
-      res.status(201).json({
-        success: true,
-        message: 'Store owner registered successfully. Your store is pending approval.',
-        data: {
-          user: responseData,
-          token
-        }
+        // Set session data
+        req.session.userId = user.id;
+        req.session.userType = user.user_type;
+        req.session.email = user.email;
+        req.session.isNewSession = true;
+        req.session.loginTime = new Date().toISOString();
+
+        // Save session
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error('Session save error:', saveErr);
+            return res.status(500).json({
+              success: false,
+              message: 'Error saving session'
+            });
+          }
+
+          // Combine user and store data
+          const responseData = {
+            ...user,
+            store: {
+              ...store,
+              categories: typeof store.categories === 'string'
+                ? JSON.parse(store.categories)
+                : store.categories
+            }
+          };
+
+          res.status(201).json({
+            success: true,
+            message: 'Store owner registered successfully. Your store is pending approval.',
+            data: {
+              user: responseData
+            }
+          });
+        });
       });
 
     } catch (error) {
