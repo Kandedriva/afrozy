@@ -14,7 +14,7 @@ const getApiUrl = () => {
 
     // Specific handling for afrozy domain
     if (hostname.includes('afrozy.com')) {
-      return 'https://afrozy.com/api';  // Backend API with /api prefix
+      return 'https://api.afrozy.com/api';  // Backend API subdomain with /api prefix
     }
 
     // Common patterns for backend URLs
