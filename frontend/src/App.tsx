@@ -314,6 +314,7 @@ function AppContent() {
       return (
         <VerifyEmail
           email={emailToUse}
+          userType={userTypeFromUrl || 'customer'}
           onVerificationSuccess={handleVerifySuccess}
           onNavigateToLogin={() => navigateTo(userTypeFromUrl === 'store_owner' ? '/store/login' : '/login')}
         />

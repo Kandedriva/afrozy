@@ -3,12 +3,14 @@ import axios from '../../utils/axios';
 
 interface VerifyEmailProps {
   email: string;
+  userType?: string;
   onVerificationSuccess: () => void;
   onNavigateToLogin: () => void;
 }
 
 const VerifyEmail: React.FC<VerifyEmailProps> = ({
   email,
+  userType = 'customer',
   onVerificationSuccess,
   onNavigateToLogin
 }) => {
@@ -121,7 +123,7 @@ const VerifyEmail: React.FC<VerifyEmailProps> = ({
       const response = await axios.post('/auth/verify-email', {
         email,
         code: verificationCode,
-        userType: 'customer'
+        userType
       });
 
       if (response.data.success) {
@@ -151,7 +153,7 @@ const VerifyEmail: React.FC<VerifyEmailProps> = ({
     try {
       const response = await axios.post('/auth/resend-verification', {
         email,
-        userType: 'customer'
+        userType
       });
 
       if (response.data.success) {
