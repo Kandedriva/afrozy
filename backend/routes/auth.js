@@ -303,6 +303,8 @@ router.post('/resend-verification', async (req, res) => {
   try {
     const { email, userType = 'customer' } = req.body;
 
+    console.log(`📧 Resend verification code request for ${email} (${userType})`);
+
     // Validation
     if (!email) {
       return res.status(400).json({
@@ -334,6 +336,7 @@ router.post('/resend-verification', async (req, res) => {
     `, [email]);
 
     if (userResult.rows.length === 0) {
+      console.log(`❌ User not found: ${email} in ${tableName} table`);
       return res.status(404).json({
         success: false,
         message: 'User not found'
@@ -341,8 +344,10 @@ router.post('/resend-verification', async (req, res) => {
     }
 
     const user = userResult.rows[0];
+    console.log(`✅ User found: ${email}, Email verified: ${user.email_verified}`);
 
     if (user.email_verified) {
+      console.log(`⚠️  Email already verified for ${email}`);
       return res.status(400).json({
         success: false,
         message: 'Email is already verified'
@@ -351,25 +356,39 @@ router.post('/resend-verification', async (req, res) => {
 
     // Generate and send new verification code
     const verificationCode = generateVerificationCode();
+    console.log(`🔢 Generated verification code for ${email}: ${verificationCode}`);
+
     const codeStored = await storeVerificationCode(email, userType, verificationCode);
 
     if (!codeStored) {
+      console.error(`❌ Failed to store verification code for ${email}`);
       return res.status(500).json({
         success: false,
         message: 'Error generating verification code'
       });
     }
 
+    console.log(`✅ Verification code stored in database for ${email}`);
+
     // Send verification email
     const userName = user.full_name || user.username;
+    console.log(`📧 Attempting to send verification email to ${email} with code: ${verificationCode}`);
+    console.log(`📧 Email service configured: ${emailService.isConfigured}`);
+
     const emailSent = await emailService.sendVerificationCode(email, userName, verificationCode);
 
     if (!emailSent) {
+      console.error(`❌ FAILED to send verification email to ${email}`);
+      console.error(`❌ Email service status: ${emailService.isConfigured ? 'Configured' : 'NOT configured'}`);
+      console.error(`❌ Check SMTP environment variables in Render dashboard`);
       return res.status(500).json({
         success: false,
         message: 'Error sending verification email'
       });
     }
+
+    console.log(`✅ Verification email sent successfully to ${email}`);
+    console.log(`📬 User should receive email at: ${email}`);
 
     res.json({
       success: true,
@@ -381,6 +400,7 @@ router.post('/resend-verification', async (req, res) => {
 
   } catch (error) {
     console.error('Resend verification error:', error.message);
+    console.error('Full error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error while resending verification code'
