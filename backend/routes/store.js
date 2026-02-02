@@ -613,7 +613,7 @@ router.post('/register', strictAuthLimiter, sanitizeInput, validateStoreRegistra
         businessType,
         businessLicense || null,
         JSON.stringify(categories),
-        'pending' // Store needs approval
+        'approved' // Auto-approve stores - they can be moderated later if needed
       ]);
 
       const store = storeResult.rows[0];
@@ -634,10 +634,17 @@ router.post('/register', strictAuthLimiter, sanitizeInput, validateStoreRegistra
       await pool.query('COMMIT');
 
       // Send verification email
+      console.log(`📧 Attempting to send verification email to ${email} with code: ${verificationCode}`);
+      console.log(`📧 Email service configured: ${emailService.isConfigured}`);
+
       const emailSent = await emailService.sendVerificationCode(email, fullName, verificationCode);
 
       if (!emailSent) {
-        console.warn(`⚠️  Failed to send verification email to ${email}, but store owner was created`);
+        console.error(`❌ FAILED to send verification email to ${email}`);
+        console.error(`❌ Store owner was created but email verification will not work`);
+        console.error(`❌ Check SMTP environment variables in Render dashboard`);
+      } else {
+        console.log(`✅ Verification email sent successfully to ${email}`);
       }
 
       // DO NOT create session - store owner must verify email first
@@ -682,8 +689,11 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log(`🔐 Store owner login attempt: ${email}`);
+
     // Validation
     if (!email || !password) {
+      console.log(`❌ Login validation failed: missing email or password`);
       return res.status(400).json({
         success: false,
         message: 'Email and password are required'
@@ -706,6 +716,7 @@ router.post('/login', async (req, res) => {
     const result = await pool.query(userQuery, [email]);
 
     if (result.rows.length === 0) {
+      console.log(`❌ Store owner not found: ${email}`);
       return res.status(401).json({
         success: false,
         message: 'Invalid store owner credentials'
@@ -714,8 +725,13 @@ router.post('/login', async (req, res) => {
 
     const userData = result.rows[0];
 
+    console.log(`✅ Store owner found: ${email}`);
+    console.log(`   Email verified: ${userData.email_verified}`);
+    console.log(`   Account status: ${userData.status}`);
+
     // Check if email is verified
     if (!userData.email_verified) {
+      console.log(`⚠️  Email not verified for ${email} - sending 403 with requiresVerification flag`);
       return res.status(403).json({
         success: false,
         message: 'Please verify your email before logging in',
@@ -727,6 +743,7 @@ router.post('/login', async (req, res) => {
 
     // Check if user account is active
     if (userData.status !== 'active') {
+      console.log(`❌ Account not active for ${email}: ${userData.status}`);
       return res.status(403).json({
         success: false,
         message: 'Your store owner account is not active. Please contact support.'
@@ -734,6 +751,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Verify password
+    console.log(`🔑 Verifying password for ${email}`);
     const isPasswordValid = await bcrypt.compare(password, userData.password_hash);
 
     if (!isPasswordValid) {
