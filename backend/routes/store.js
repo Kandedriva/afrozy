@@ -4,6 +4,11 @@ const { pool } = require('../config/database');
 const { authenticateSession } = require('../utils/auth');
 const { strictAuthLimiter, storeManagementLimiter } = require('../config/security');
 const { validateStoreRegistration, validateUserLogin, sanitizeInput } = require('../middleware/inputValidation');
+const {
+  generateVerificationCode,
+  storeVerificationCode
+} = require('../utils/verificationCode');
+const emailService = require('../utils/emailService');
 
 const router = express.Router();
 
@@ -613,55 +618,48 @@ router.post('/register', strictAuthLimiter, sanitizeInput, validateStoreRegistra
 
       const store = storeResult.rows[0];
 
+      // Generate and send verification code
+      const verificationCode = generateVerificationCode();
+      const codeStored = await storeVerificationCode(email, 'store_owner', verificationCode);
+
+      if (!codeStored) {
+        await pool.query('ROLLBACK');
+        return res.status(500).json({
+          success: false,
+          message: 'Error generating verification code'
+        });
+      }
+
       // Commit transaction
       await pool.query('COMMIT');
 
-      // Create session for the new store owner
-      req.session.regenerate((err) => {
-        if (err) {
-          console.error('Session regeneration error:', err);
-          return res.status(500).json({
-            success: false,
-            message: 'Error creating session'
-          });
+      // Send verification email
+      const emailSent = await emailService.sendVerificationCode(email, fullName, verificationCode);
+
+      if (!emailSent) {
+        console.warn(`⚠️  Failed to send verification email to ${email}, but store owner was created`);
+      }
+
+      // DO NOT create session - store owner must verify email first
+      // Return response indicating email verification is required
+      const responseData = {
+        ...user,
+        store: {
+          ...store,
+          categories: typeof store.categories === 'string'
+            ? JSON.parse(store.categories)
+            : store.categories
         }
+      };
 
-        // Set session data
-        req.session.userId = user.id;
-        req.session.userType = user.user_type;
-        req.session.email = user.email;
-        req.session.isNewSession = true;
-        req.session.loginTime = new Date().toISOString();
-
-        // Save session
-        req.session.save((saveErr) => {
-          if (saveErr) {
-            console.error('Session save error:', saveErr);
-            return res.status(500).json({
-              success: false,
-              message: 'Error saving session'
-            });
-          }
-
-          // Combine user and store data
-          const responseData = {
-            ...user,
-            store: {
-              ...store,
-              categories: typeof store.categories === 'string'
-                ? JSON.parse(store.categories)
-                : store.categories
-            }
-          };
-
-          res.status(201).json({
-            success: true,
-            message: 'Store owner registered successfully. Your store is pending approval.',
-            data: {
-              user: responseData
-            }
-          });
-        });
+      res.status(201).json({
+        success: true,
+        message: 'Store owner registered successfully! Please check your email for a verification code.',
+        requiresVerification: true,
+        data: {
+          email: email,
+          userType: 'store_owner'
+        }
       });
 
     } catch (error) {
@@ -694,16 +692,17 @@ router.post('/login', async (req, res) => {
 
     // Find store owner by email
     const userQuery = `
-      SELECT so.id, so.username, so.email, so.password_hash, so.full_name, 
+      SELECT so.id, so.username, so.email, so.password_hash, so.full_name,
              so.phone, 'store_owner' as user_type, so.status, so.created_at,
-             s.id as store_id, s.store_name, s.store_description, 
-             s.store_address, s.business_type, s.business_license, 
+             so.email_verified,
+             s.id as store_id, s.store_name, s.store_description,
+             s.store_address, s.business_type, s.business_license,
              s.categories, s.status as store_status, s.created_at as store_created_at
       FROM store_owners so
       LEFT JOIN stores s ON so.id = s.owner_id
       WHERE so.email = $1
     `;
-    
+
     const result = await pool.query(userQuery, [email]);
 
     if (result.rows.length === 0) {
@@ -714,6 +713,17 @@ router.post('/login', async (req, res) => {
     }
 
     const userData = result.rows[0];
+
+    // Check if email is verified
+    if (!userData.email_verified) {
+      return res.status(403).json({
+        success: false,
+        message: 'Please verify your email before logging in',
+        requiresVerification: true,
+        email: email,
+        userType: 'store_owner'
+      });
+    }
 
     // Check if user account is active
     if (userData.status !== 'active') {
@@ -762,8 +772,8 @@ router.post('/login', async (req, res) => {
         store_address: userData.store_address,
         business_type: userData.business_type,
         business_license: userData.business_license,
-        categories: userData.categories ? 
-          (typeof userData.categories === 'string' ? JSON.parse(userData.categories) : userData.categories) 
+        categories: userData.categories ?
+          (typeof userData.categories === 'string' ? JSON.parse(userData.categories) : userData.categories)
           : [],
         status: userData.store_status,
         created_at: userData.store_created_at
