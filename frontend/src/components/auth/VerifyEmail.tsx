@@ -143,7 +143,7 @@ const VerifyEmail: React.FC<VerifyEmailProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [code, email, onVerificationSuccess]);
+  }, [code, email, userType, onVerificationSuccess]);
 
   // Resend code
   const handleResend = async () => {
