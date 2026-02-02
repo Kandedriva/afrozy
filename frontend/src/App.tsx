@@ -289,17 +289,33 @@ function AppContent() {
       );
     }
 
-    if (currentRoute === '/verify-email') {
-      if (!verificationEmail) {
-        // If no email set, redirect to register
+    if (currentRoute === '/verify-email' || currentRoute.startsWith('/verify-email?')) {
+      // Get email from URL parameters if not in state
+      const urlParams = new URLSearchParams(window.location.search);
+      const emailFromUrl = urlParams.get('email');
+      const userTypeFromUrl = urlParams.get('userType');
+      const emailToUse = emailFromUrl || verificationEmail;
+
+      if (!emailToUse) {
+        // If no email available, redirect to register
         navigateTo('/register');
         return null;
       }
+
+      const handleVerifySuccess = () => {
+        // Redirect based on user type
+        if (userTypeFromUrl === 'store_owner') {
+          navigateTo('/store/login');
+        } else {
+          handleVerificationSuccess();
+        }
+      };
+
       return (
         <VerifyEmail
-          email={verificationEmail}
-          onVerificationSuccess={handleVerificationSuccess}
-          onNavigateToLogin={() => navigateTo('/login')}
+          email={emailToUse}
+          onVerificationSuccess={handleVerifySuccess}
+          onNavigateToLogin={() => navigateTo(userTypeFromUrl === 'store_owner' ? '/store/login' : '/login')}
         />
       );
     }
