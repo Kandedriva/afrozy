@@ -146,9 +146,20 @@ const StoreOwnerRegister: React.FC<StoreOwnerRegisterProps> = ({
       });
 
       if (response.data.success) {
-        const { user, token } = response.data.data;
-        if (onRegisterSuccess) {
-          onRegisterSuccess(user, token);
+        // Check if email verification is required
+        if (response.data.requiresVerification) {
+          // Redirect to verification page
+          const email = response.data.data?.email || formData.email;
+          const userType = response.data.data?.userType || 'store_owner';
+
+          // Navigate to verification page
+          window.location.href = `/verify-email?email=${encodeURIComponent(email)}&userType=${userType}`;
+        } else {
+          // Legacy: if verification not required, proceed with login
+          const { user, token } = response.data.data;
+          if (onRegisterSuccess) {
+            onRegisterSuccess(user, token);
+          }
         }
       } else {
         setError(response.data.message || 'Registration failed');

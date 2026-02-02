@@ -52,7 +52,12 @@ const StoreOwnerLogin: React.FC<StoreOwnerLoginProps> = ({
         setError(response.data.message || 'Login failed');
       }
     } catch (err: any) {
-      if (err.response?.data?.message) {
+      if (err.response?.data?.requiresVerification) {
+        // Email not verified - redirect to verification page
+        const email = err.response.data.email || formData.email;
+        const userType = err.response.data.userType || 'store_owner';
+        window.location.href = `/verify-email?email=${encodeURIComponent(email)}&userType=${userType}`;
+      } else if (err.response?.data?.message) {
         setError(err.response.data.message);
       } else {
         setError('Login failed. Please check your connection and try again.');
