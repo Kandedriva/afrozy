@@ -1,44 +1,55 @@
 /**
  * Email Service Utility
- * Handles all email sending operations using NodeMailer
+ * Handles all email sending operations using SendGrid HTTP API or NodeMailer SMTP
  */
 
 const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 
 class EmailService {
   constructor() {
     this.transporter = null;
+    this.useSendGrid = false;
     this.isConfigured = false;
-    this.initializeTransporter();
+    this.initializeService();
   }
 
   /**
-   * Initialize email transporter with SMTP configuration
+   * Initialize email service with SendGrid HTTP API (preferred) or SMTP fallback
    */
-  initializeTransporter() {
+  initializeService() {
     try {
-      // Check if email configuration exists
-      if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-        console.warn('⚠️  Email service not configured. SMTP credentials missing.');
-        this.isConfigured = false;
+      // Check for SendGrid API key (preferred method - no firewall issues)
+      if (process.env.SENDGRID_API_KEY) {
+        sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+        this.useSendGrid = true;
+        this.isConfigured = true;
+        console.log('✅ Email service configured successfully (SendGrid HTTP API)');
         return;
       }
 
-      this.transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || '587'),
-        secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
-        tls: {
-          rejectUnauthorized: process.env.NODE_ENV === 'production'
-        }
-      });
+      // Fallback to SMTP if SendGrid API key not available
+      if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+        this.transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST,
+          port: parseInt(process.env.SMTP_PORT || '587'),
+          secure: process.env.SMTP_SECURE === 'true',
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          },
+          tls: {
+            rejectUnauthorized: process.env.NODE_ENV === 'production'
+          }
+        });
+        this.useSendGrid = false;
+        this.isConfigured = true;
+        console.log('✅ Email service configured successfully (SMTP)');
+        return;
+      }
 
-      this.isConfigured = true;
-      console.log('✅ Email service configured successfully');
+      console.warn('⚠️  Email service not configured. Set SENDGRID_API_KEY or SMTP credentials.');
+      this.isConfigured = false;
     } catch (error) {
       console.error('❌ Failed to initialize email service:', error.message);
       this.isConfigured = false;
@@ -64,6 +75,25 @@ class EmailService {
     }
 
     try {
+      // Use SendGrid HTTP API (preferred)
+      if (this.useSendGrid) {
+        const msg = {
+          to: email,
+          from: {
+            email: process.env.SMTP_FROM_EMAIL || 'noreply@afrozy.com',
+            name: process.env.SMTP_FROM_NAME || 'Afrozy Marketplace'
+          },
+          subject: 'Verify Your Email - Afrozy Marketplace',
+          html: this.getVerificationEmailTemplate(name, verificationCode),
+          text: this.getVerificationEmailText(name, verificationCode)
+        };
+
+        await sgMail.send(msg);
+        console.log(`✅ Verification email sent to ${email} via SendGrid HTTP API`);
+        return true;
+      }
+
+      // Fallback to SMTP
       const mailOptions = {
         from: `"${process.env.SMTP_FROM_NAME || 'Afrozy Marketplace'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
         to: email,
@@ -73,21 +103,18 @@ class EmailService {
       };
 
       const info = await this.transporter.sendMail(mailOptions);
-      console.log(`✅ Verification email sent to ${email}: ${info.messageId}`);
+      console.log(`✅ Verification email sent to ${email} via SMTP: ${info.messageId}`);
       return true;
     } catch (error) {
       console.error(`❌ Failed to send verification email to ${email}:`);
       console.error(`❌ Error message: ${error.message}`);
       console.error(`❌ Error code: ${error.code}`);
-      console.error(`❌ Error response: ${error.response}`);
+      console.error(`❌ Error response:`, error.response?.body || error.response);
       console.error(`❌ Full error:`, error);
 
-      // Log SendGrid specific error details if available
-      if (error.response) {
-        console.error(`❌ SendGrid response body:`, error.response);
-      }
-      if (error.responseCode) {
-        console.error(`❌ SMTP response code: ${error.responseCode}`);
+      // Log SendGrid HTTP API specific error details
+      if (error.response && error.response.body) {
+        console.error(`❌ SendGrid API error details:`, error.response.body);
       }
 
       return false;
