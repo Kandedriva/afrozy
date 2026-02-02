@@ -15,10 +15,10 @@ const validationSchemas = {
   
   password: {
     type: 'string',
-    minLength: 8,
+    minLength: 6,
     maxLength: 128,
-    pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/,
-    message: 'Password must be at least 8 characters and contain uppercase, lowercase, and number'
+    // Removed complex pattern to match frontend validation (6 chars minimum)
+    message: 'Password must be at least 6 characters'
   },
   
   name: {
@@ -232,11 +232,11 @@ const validateProduct = createValidationMiddleware({
 const validateStoreRegistration = createValidationMiddleware({
   email: 'email',
   password: 'password',
-  full_name: 'name',
+  fullName: 'name',  // Frontend sends camelCase
   phone: 'phone',
-  store_name: 'name',
-  store_description: 'description',
-  store_address: 'text'
+  storeName: 'name',  // Frontend sends camelCase
+  storeDescription: 'description',  // Frontend sends camelCase
+  storeAddress: 'text'  // Frontend sends camelCase
 });
 
 /**
