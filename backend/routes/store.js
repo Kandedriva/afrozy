@@ -731,10 +731,33 @@ router.post('/login', async (req, res) => {
 
     // Check if email is verified
     if (!userData.email_verified) {
-      console.log(`⚠️  Email not verified for ${email} - sending 403 with requiresVerification flag`);
+      console.log(`⚠️  Email not verified for ${email} - generating and sending verification code`);
+
+      // Generate and send new verification code
+      const verificationCode = generateVerificationCode();
+      console.log(`🔢 Generated verification code for ${email}: ${verificationCode}`);
+
+      const codeStored = await storeVerificationCode(email, 'store_owner', verificationCode);
+
+      if (codeStored) {
+        console.log(`✅ Verification code stored in database for ${email}`);
+
+        // Send verification email
+        console.log(`📧 Attempting to send verification email to ${email}`);
+        const emailSent = await emailService.sendVerificationCode(email, userData.full_name, verificationCode);
+
+        if (emailSent) {
+          console.log(`✅ Verification email sent successfully to ${email}`);
+        } else {
+          console.error(`❌ Failed to send verification email to ${email}`);
+        }
+      } else {
+        console.error(`❌ Failed to store verification code for ${email}`);
+      }
+
       return res.status(403).json({
         success: false,
-        message: 'Please verify your email before logging in',
+        message: 'Please verify your email before logging in. A verification code has been sent to your email.',
         requiresVerification: true,
         email: email,
         userType: 'store_owner'

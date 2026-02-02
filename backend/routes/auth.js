@@ -161,11 +161,40 @@ router.post('/login', async (req, res) => {
     const emailVerified = await isEmailVerified(email, authResult.data.user.user_type);
 
     if (!emailVerified) {
+      console.log(`⚠️  Email not verified for ${email} - generating and sending verification code`);
+
+      // Generate and send new verification code
+      const verificationCode = generateVerificationCode();
+      console.log(`🔢 Generated verification code for ${email}: ${verificationCode}`);
+
+      const codeStored = await storeVerificationCode(email, authResult.data.user.user_type, verificationCode);
+
+      if (codeStored) {
+        console.log(`✅ Verification code stored in database for ${email}`);
+
+        // Send verification email
+        console.log(`📧 Attempting to send verification email to ${email}`);
+        const emailSent = await emailService.sendVerificationCode(
+          email,
+          authResult.data.user.full_name || authResult.data.user.username,
+          verificationCode
+        );
+
+        if (emailSent) {
+          console.log(`✅ Verification email sent successfully to ${email}`);
+        } else {
+          console.error(`❌ Failed to send verification email to ${email}`);
+        }
+      } else {
+        console.error(`❌ Failed to store verification code for ${email}`);
+      }
+
       return res.status(403).json({
         success: false,
-        message: 'Please verify your email address before logging in',
+        message: 'Please verify your email address before logging in. A verification code has been sent to your email.',
         requiresVerification: true,
-        email: email
+        email: email,
+        userType: authResult.data.user.user_type
       });
     }
 
