@@ -76,7 +76,20 @@ class EmailService {
       console.log(`✅ Verification email sent to ${email}: ${info.messageId}`);
       return true;
     } catch (error) {
-      console.error(`❌ Failed to send verification email to ${email}:`, error.message);
+      console.error(`❌ Failed to send verification email to ${email}:`);
+      console.error(`❌ Error message: ${error.message}`);
+      console.error(`❌ Error code: ${error.code}`);
+      console.error(`❌ Error response: ${error.response}`);
+      console.error(`❌ Full error:`, error);
+
+      // Log SendGrid specific error details if available
+      if (error.response) {
+        console.error(`❌ SendGrid response body:`, error.response);
+      }
+      if (error.responseCode) {
+        console.error(`❌ SMTP response code: ${error.responseCode}`);
+      }
+
       return false;
     }
   }
